@@ -6,15 +6,16 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesChart } from "@/components/dashboard/SalesChart";
 import { RecentOrders } from "@/components/dashboard/RecentOrders";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
+import { useTinyOrders } from "@/hooks/useTinyOrders";
+import { useToast } from "@/hooks/use-toast";
 import { 
   DollarSign, 
   ShoppingCart, 
   Users, 
   Package,
-  TrendingUp
 } from "lucide-react";
 
-// Mock data - será substituído pelos dados reais da API
+// Mock data para gráficos (será substituído quando tivermos mais endpoints)
 const mockRevenueData = [
   { name: 'Jul', receita: 45000, custos: 28000 },
   { name: 'Ago', receita: 52000, custos: 31000 },
@@ -32,31 +33,51 @@ const mockSalesData = [
   { name: 'Esportes', vendas: 98 },
 ];
 
-const mockOrders = [
-  { id: 'ORD-2024-1234', cliente: 'Maria Silva', valor: 1250.00, status: 'concluido' as const, data: '09/12/2024 14:32' },
-  { id: 'ORD-2024-1235', cliente: 'João Santos', valor: 890.50, status: 'processando' as const, data: '09/12/2024 13:45' },
-  { id: 'ORD-2024-1236', cliente: 'Ana Costa', valor: 2340.00, status: 'pendente' as const, data: '09/12/2024 12:18' },
-  { id: 'ORD-2024-1237', cliente: 'Pedro Oliveira', valor: 567.80, status: 'concluido' as const, data: '09/12/2024 11:05' },
-  { id: 'ORD-2024-1238', cliente: 'Carla Mendes', valor: 1890.00, status: 'cancelado' as const, data: '09/12/2024 10:22' },
-];
-
 const Index = () => {
   const [activeItem, setActiveItem] = useState("dashboard");
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(new Date());
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [apiConfig, setApiConfig] = useState<{ apiUrl: string; apiKey: string } | null>(null);
+  
+  const { orders, isLoading, error, fetchOrders } = useTinyOrders();
+  const { toast } = useToast();
+
+  // Buscar pedidos ao carregar
+  useEffect(() => {
+    fetchOrders().then(() => {
+      setLastUpdate(new Date());
+    });
+  }, [fetchOrders]);
+
+  // Mostrar erro se houver
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Erro ao carregar pedidos",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Simulating data refresh
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await fetchOrders();
     setLastUpdate(new Date());
     setIsRefreshing(false);
+    toast({
+      title: "Dados atualizados",
+      description: "Os pedidos foram sincronizados com o Tiny ERP.",
+    });
   };
 
   const handleSaveConfig = (config: { apiUrl: string; apiKey: string }) => {
     setApiConfig(config);
   };
+
+  // Calcular estatísticas dos pedidos
+  const totalRevenue = orders.reduce((sum, order) => sum + order.valor, 0);
+  const totalOrders = orders.length;
 
   const renderContent = () => {
     if (activeItem === "webhooks") {
@@ -75,14 +96,14 @@ const Index = () => {
       <>
         <div className="mb-8">
           <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Visão geral dos dados do seu ERP</p>
+          <p className="text-muted-foreground">Visão geral dos dados do seu ERP - Tiny</p>
         </div>
 
         {/* Stats Grid */}
         <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="Receita Total"
-            value="R$ 328.500"
+            value={`R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
             change={12.5}
             changeLabel="vs mês anterior"
             icon={DollarSign}
@@ -90,7 +111,7 @@ const Index = () => {
           />
           <StatCard
             title="Pedidos"
-            value="1.248"
+            value={totalOrders.toString()}
             change={8.2}
             changeLabel="vs mês anterior"
             icon={ShoppingCart}
@@ -121,7 +142,7 @@ const Index = () => {
         </div>
 
         {/* Recent Orders */}
-        <RecentOrders orders={mockOrders} />
+        <RecentOrders orders={orders} isLoading={isLoading} />
       </>
     );
   };
@@ -133,7 +154,7 @@ const Index = () => {
       <div className="pl-64">
         <Header 
           onRefresh={handleRefresh} 
-          isRefreshing={isRefreshing}
+          isRefreshing={isRefreshing || isLoading}
           lastUpdate={lastUpdate}
         />
         

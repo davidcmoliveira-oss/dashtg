@@ -1,1 +1,4 @@
 project_id = "cwrlqhtfxzsaxkdbkbss"
+
+[functions.tiny-orders]
+verify_jwt = false
