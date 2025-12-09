@@ -1,22 +1,27 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export interface TinyOrder {
-  id: number;
-  numero: string;
-  cliente: {
+export interface TinyOrderV2 {
+  pedido: {
+    id: number;
+    numero: number;
+    numero_ecommerce?: string;
+    data_pedido: string;
+    data_prevista?: string;
     nome: string;
+    valor: number;
+    id_vendedor?: number;
+    nome_vendedor?: string;
+    situacao: string;
+    codigo_rastreamento?: string;
   };
-  valor: number;
-  situacao: string;
-  data_pedido: string;
 }
 
-interface TinyOrdersResponse {
-  itens: TinyOrder[];
-  pagina_atual: number;
-  total_paginas: number;
-  total_registros: number;
+interface TinyOrdersResponseV2 {
+  status: string;
+  pagina: number;
+  numero_paginas: number;
+  pedidos: TinyOrderV2[];
 }
 
 type OrderStatus = 'pendente' | 'processando' | 'concluido' | 'cancelado';
@@ -25,19 +30,24 @@ const mapTinyStatus = (situacao: string): OrderStatus => {
   const statusMap: Record<string, OrderStatus> = {
     'aberto': 'pendente',
     'aprovado': 'processando',
-    'preparando_envio': 'processando',
+    'preparando envio': 'processando',
     'faturado': 'concluido',
+    'faturado (atendido parcialmente)': 'concluido',
     'enviado': 'concluido',
     'entregue': 'concluido',
+    'atendido': 'concluido',
     'cancelado': 'cancelado',
+    'em aberto': 'pendente',
+    'não entregue': 'cancelado',
   };
   return statusMap[situacao?.toLowerCase()] || 'pendente';
 };
 
 export const useTinyOrders = () => {
-  const [orders, setOrders] = useState<TinyOrder[]>([]);
+  const [orders, setOrders] = useState<TinyOrderV2[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState({ pagina: 1, totalPaginas: 1 });
 
   const fetchOrders = useCallback(async (pagina = 1) => {
     setIsLoading(true);
@@ -56,8 +66,13 @@ export const useTinyOrders = () => {
         throw new Error(data.error);
       }
 
-      setOrders(data.itens || []);
-      return data as TinyOrdersResponse;
+      setOrders(data.pedidos || []);
+      setPagination({
+        pagina: data.pagina || 1,
+        totalPaginas: data.numero_paginas || 1,
+      });
+      
+      return data as TinyOrdersResponseV2;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao buscar pedidos';
       setError(message);
@@ -68,20 +83,12 @@ export const useTinyOrders = () => {
     }
   }, []);
 
-  const transformedOrders = orders.map((order) => ({
-    id: `ORD-${order.id}`,
-    cliente: order.cliente?.nome || 'Cliente não informado',
-    valor: order.valor || 0,
-    status: mapTinyStatus(order.situacao),
-    data: order.data_pedido 
-      ? new Date(order.data_pedido).toLocaleString('pt-BR', { 
-          day: '2-digit', 
-          month: '2-digit', 
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }) 
-      : '-',
+  const transformedOrders = orders.map((item) => ({
+    id: `ORD-${item.pedido.id}`,
+    cliente: item.pedido.nome || 'Cliente não informado',
+    valor: item.pedido.valor || 0,
+    status: mapTinyStatus(item.pedido.situacao),
+    data: item.pedido.data_pedido || '-',
   }));
 
   return {
@@ -89,6 +96,7 @@ export const useTinyOrders = () => {
     rawOrders: orders,
     isLoading,
     error,
+    pagination,
     fetchOrders,
   };
 };
