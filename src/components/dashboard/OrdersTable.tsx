@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, Download, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Download, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,15 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   const formatCurrency = (value: number) =>
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
+  const parseDate = (dateStr: string): Date => {
+    if (!dateStr) return new Date(0);
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+    return new Date(dateStr);
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -63,20 +72,14 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
     .filter(order =>
       order.order_id.toLowerCase().includes(search.toLowerCase()) ||
       order.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      order.shipping_city.toLowerCase().includes(search.toLowerCase())
+      order.shipping_city.toLowerCase().includes(search.toLowerCase()) ||
+      order.payment_method.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
         case 'order_date':
-          const parseDate = (d: string) => {
-            const parts = d.split('/');
-            if (parts.length === 3) {
-              return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0])).getTime();
-            }
-            return 0;
-          };
-          comparison = parseDate(a.order_date) - parseDate(b.order_date);
+          comparison = parseDate(a.order_date).getTime() - parseDate(b.order_date).getTime();
           break;
         case 'total_paid':
           comparison = a.total_paid - b.total_paid;
@@ -101,7 +104,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   );
 
   const exportCSV = () => {
-    const headers = ['ID', 'Data', 'Cliente', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Status', 'Cidade', 'Pagamento'];
+    const headers = ['ID', 'Data', 'Cliente', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Cidade', 'Estado', 'CEP', 'Pagamento', 'Canal', 'Status Entrega'];
     const rows = filteredOrders.map(o => [
       o.order_id,
       o.order_date,
@@ -109,18 +112,29 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
       o.items_count,
       o.total_paid,
       o.net_revenue,
+      o.discount,
+      o.tax,
+      o.freight_cost,
       o.status,
       o.shipping_city,
+      o.shipping_state,
+      o.cep,
       o.payment_method,
+      o.sales_channel,
+      o.delivery_status,
     ]);
 
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `pedidos_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
+  };
+
+  const exportPDF = () => {
+    window.print();
   };
 
   const getStatusBadge = (status: string) => {
@@ -148,12 +162,12 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div className="rounded-xl border border-border bg-card p-6 animate-slide-up">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar pedido, cliente..."
+            placeholder="Buscar pedido, cliente, cidade..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -162,10 +176,16 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
             className="pl-9"
           />
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
-          <Download className="h-4 w-4" />
-          Exportar CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
+            <Download className="h-4 w-4" />
+            CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportPDF} className="gap-2">
+            <FileText className="h-4 w-4" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -203,14 +223,16 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
               >
                 Valor Líquido <SortIcon field="net_revenue" />
               </TableHead>
+              <TableHead>Pagamento</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Cidade</TableHead>
+              <TableHead>Entrega</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Nenhum pedido encontrado
                 </TableCell>
               </TableRow>
@@ -237,8 +259,12 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                   <TableCell className="text-center">{order.items_count}</TableCell>
                   <TableCell className="text-right">{formatCurrency(order.total_paid)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(order.net_revenue)}</TableCell>
+                  <TableCell>{order.payment_method}</TableCell>
                   <TableCell>{getStatusBadge(order.status)}</TableCell>
                   <TableCell>{order.shipping_city}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{order.delivery_status}</Badge>
+                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -276,13 +302,13 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
 
       {/* Order Detail Modal */}
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pedido {selectedOrder?.order_id}</DialogTitle>
           </DialogHeader>
           {selectedOrder && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Data</p>
                   <p className="font-medium">{selectedOrder.order_date}</p>
@@ -299,7 +325,30 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                   <p className="text-sm text-muted-foreground">Itens</p>
                   <p className="font-medium">{selectedOrder.items_count}</p>
                 </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Canal</p>
+                  <p className="font-medium">{selectedOrder.sales_channel}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Forma de Pagamento</p>
+                  <p className="font-medium">{selectedOrder.payment_method}</p>
+                </div>
               </div>
+
+              {/* SKU List */}
+              {selectedOrder.sku_list.length > 0 && (
+                <div className="border-t border-border pt-4">
+                  <h4 className="font-medium mb-3">Itens do Pedido</h4>
+                  <div className="space-y-2">
+                    {selectedOrder.sku_list.map((sku, idx) => (
+                      <div key={idx} className="flex justify-between py-2 border-b border-border last:border-0">
+                        <span className="font-mono text-sm">{sku}</span>
+                        <span className="text-muted-foreground">1x</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-border pt-4">
                 <h4 className="font-medium mb-3">Valores</h4>
@@ -358,15 +407,26 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                       <Badge variant="outline">{selectedOrder.delivery_status}</Badge>
                     </div>
                   )}
+                  {selectedOrder.delivery_promised_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Data Prometida</span>
+                      <span>{selectedOrder.delivery_promised_date}</span>
+                    </div>
+                  )}
+                  {selectedOrder.delivery_actual_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Data Realizada</span>
+                      <span>{selectedOrder.delivery_actual_date}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="border-t border-border pt-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Forma de Pagamento</span>
-                  <span>{selectedOrder.payment_method}</span>
+              {selectedOrder.returned_flag && (
+                <div className="border-t border-border pt-4">
+                  <Badge variant="destructive">Pedido Devolvido</Badge>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </DialogContent>
