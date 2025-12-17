@@ -1,12 +1,10 @@
 import { cn } from "@/lib/utils";
 import { 
   LayoutDashboard, 
-  BarChart3, 
   Settings, 
   Webhook, 
-  TrendingUp,
   Users,
-  FileText
+  Package
 } from "lucide-react";
 
 interface SidebarProps {
@@ -16,10 +14,8 @@ interface SidebarProps {
 
 const menuItems = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "sales", label: "Vendas", icon: TrendingUp },
   { id: "customers", label: "Clientes", icon: Users },
-  { id: "reports", label: "Relatórios", icon: FileText },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "products", label: "Produtos", icon: Package },
 ];
 
 const bottomItems = [
@@ -34,7 +30,7 @@ export const Sidebar = ({ activeItem, onItemClick }: SidebarProps) => {
         {/* Logo */}
         <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-            <BarChart3 className="h-5 w-5 text-primary-foreground" />
+            <Package className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="text-lg font-semibold text-foreground">Tiny Dashboard</span>
         </div>

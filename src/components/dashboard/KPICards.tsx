@@ -1,4 +1,4 @@
-import { DollarSign, ShoppingCart, Users, TrendingUp, Receipt } from "lucide-react";
+import { DollarSign, ShoppingCart, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KPIData, TimeSeriesData } from "@/types/dashboard";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
@@ -24,16 +24,15 @@ const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay
   
   return (
     <div 
-      className="relative overflow-hidden rounded-xl border border-border bg-card p-5 animate-slide-up"
+      className="relative overflow-hidden rounded-xl border border-border bg-card p-5 animate-slide-up shadow-sm"
       style={{ animationDelay: `${delay}ms` }}
     >
-      {/* Background glow */}
       <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-primary/5 blur-2xl" />
       
       <div className="relative">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Icon className="h-4 w-4" />
+            <Icon className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium">{title}</span>
           </div>
           {!isLoading && sparkline.length > 1 && (
@@ -70,7 +69,7 @@ const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay
             <Skeleton className="h-4 w-24" />
           ) : (
             <>
-              <span className={`text-sm font-medium ${isPositive ? 'text-success' : 'text-destructive'}`}>
+              <span className={`text-sm font-medium ${isPositive ? 'text-accent' : 'text-destructive'}`}>
                 {isPositive ? '+' : ''}{change.toFixed(1)}%
               </span>
               <span className="text-xs text-muted-foreground">vs período anterior</span>
@@ -93,16 +92,10 @@ export const KPICards = ({ kpis, sparklineData, isLoading }: KPICardsProps) => {
 
   const cards = [
     {
-      title: "Receita Bruta",
-      value: formatCurrency(kpis.gross_revenue),
-      change: calculateChange(kpis.gross_revenue, kpis.prev_gross_revenue),
+      title: "Receita Total",
+      value: formatCurrency(kpis.total_revenue),
+      change: calculateChange(kpis.total_revenue, kpis.prev_total_revenue),
       icon: DollarSign,
-    },
-    {
-      title: "Receita Líquida",
-      value: formatCurrency(kpis.net_revenue),
-      change: calculateChange(kpis.net_revenue, kpis.prev_net_revenue),
-      icon: Receipt,
     },
     {
       title: "Nº de Pedidos",
@@ -125,7 +118,7 @@ export const KPICards = ({ kpis, sparklineData, isLoading }: KPICardsProps) => {
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
       {cards.map((card, index) => (
         <KPICard
           key={card.title}
