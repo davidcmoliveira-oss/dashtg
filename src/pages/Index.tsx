@@ -8,6 +8,7 @@ import { TopItemsCards } from "@/components/dashboard/TopItemsCards";
 import { OrdersTable } from "@/components/dashboard/OrdersTable";
 import { CustomersListView } from "@/components/dashboard/CustomersListView";
 import { CustomerDetailView } from "@/components/dashboard/CustomerDetailView";
+import { ProductsView } from "@/components/dashboard/ProductsView";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useToast } from "@/hooks/use-toast";
@@ -25,6 +26,7 @@ const Index = () => {
   const {
     orders,
     customers,
+    products,
     kpis,
     timeSeriesData,
     filterOptions,
@@ -115,20 +117,6 @@ const Index = () => {
           </div>
         );
 
-      case "sales":
-        return (
-          <div className="animate-slide-up">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold">Vendas</h1>
-              <p className="text-muted-foreground">Análise detalhada de pedidos</p>
-            </div>
-            <GlobalFilters filters={filters} onFiltersChange={setFilters} filterOptions={filterOptions} />
-            <KPICards kpis={kpis} sparklineData={timeSeriesData} isLoading={isLoading} />
-            <TimeSeriesChart data={timeSeriesData} isLoading={isLoading} />
-            <OrdersTable orders={orders} isLoading={isLoading} onCustomerClick={handleCustomerClick} />
-          </div>
-        );
-
       case "customers":
         return (
           <div className="animate-slide-up">
@@ -144,6 +132,16 @@ const Index = () => {
           </div>
         );
 
+      case "products":
+        return (
+          <ProductsView
+            products={products}
+            orders={orders}
+            isLoading={isLoading}
+            onCustomerClick={handleCustomerClick}
+          />
+        );
+
       case "settings":
         return (
           <div className="max-w-2xl animate-slide-up">
@@ -152,7 +150,7 @@ const Index = () => {
               <p className="text-muted-foreground">Gerencie as configurações do dashboard</p>
             </div>
             <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-card p-6">
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
                 <h3 className="text-lg font-semibold mb-4">Informações do Sistema</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between py-2 border-b border-border">
@@ -161,7 +159,7 @@ const Index = () => {
                   </div>
                   <div className="flex justify-between py-2 border-b border-border">
                     <span className="text-muted-foreground">Integração</span>
-                    <span className="font-medium text-success">Tiny ERP (Ativo)</span>
+                    <span className="font-medium text-accent">Tiny ERP (Ativo)</span>
                   </div>
                   <div className="flex justify-between py-2">
                     <span className="text-muted-foreground">Última sincronização</span>
@@ -189,7 +187,7 @@ const Index = () => {
             <GlobalFilters filters={filters} onFiltersChange={setFilters} filterOptions={filterOptions} />
             <KPICards kpis={kpis} sparklineData={timeSeriesData} isLoading={isLoading} />
             <TimeSeriesChart data={timeSeriesData} isLoading={isLoading} />
-            <TopItemsCards orders={orders} customers={customers} isLoading={isLoading} onCustomerClick={handleCustomerClick} />
+            <TopItemsCards orders={orders} customers={customers} products={products} isLoading={isLoading} onCustomerClick={handleCustomerClick} />
             <OrdersTable orders={orders} isLoading={isLoading} onCustomerClick={handleCustomerClick} />
           </div>
         );

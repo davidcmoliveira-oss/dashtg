@@ -3,6 +3,7 @@
 export interface TinyOrder {
   order_id: string;
   order_date: string;
+  order_time?: string;
   created_at: string;
   status: string;
   payment_status?: string;
@@ -15,6 +16,7 @@ export interface TinyOrder {
   net_revenue: number;
   items_count: number;
   sku_list: string[];
+  product_name?: string;
   product_category: string;
   product_brand: string;
   sales_channel: string;
@@ -47,10 +49,12 @@ export interface CustomerData {
   first_order_date: string;
   last_order_date: string;
   days_since_last_purchase: number;
+  avg_days_between_purchases: number;
   is_active: boolean;
   cltv_3y: number;
   orders: TinyOrder[];
   products: ProductPurchase[];
+  top_payment_method?: string;
 }
 
 export interface ProductPurchase {
@@ -59,6 +63,21 @@ export interface ProductPurchase {
   qty_total: number;
   spend_total: number;
   last_purchase_date: string;
+}
+
+export interface ProductData {
+  sku: string;
+  product_name: string;
+  total_qty: number;
+  total_revenue: number;
+  total_orders: number;
+  last_sale_date: string;
+  abc_class: 'A' | 'B' | 'C';
+  days_without_sale: number;
+  customers: string[];
+  sales_by_weekday: number[];
+  sales_by_monthday: number[];
+  max_gap_without_sale: number;
 }
 
 export interface DashboardFilters {
@@ -74,13 +93,11 @@ export interface DashboardFilters {
 }
 
 export interface KPIData {
-  gross_revenue: number;
-  net_revenue: number;
+  total_revenue: number;
   total_orders: number;
   avg_ticket: number;
   unique_customers: number;
-  prev_gross_revenue: number;
-  prev_net_revenue: number;
+  prev_total_revenue: number;
   prev_total_orders: number;
   prev_avg_ticket: number;
   prev_unique_customers: number;
@@ -137,11 +154,23 @@ export const calculateNetRevenue = (order: TinyOrder): number => {
   return order.total_paid - (order.discount || 0) - (order.tax || 0) - (order.freight_cost || 0);
 };
 
+// Corrigido: parse de data brasileira DD/MM/YYYY
+const parseBrazilianDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  }
+  return new Date(dateStr);
+};
+
 export const calculateDaysSinceLastPurchase = (lastOrderDate: string): number => {
   const today = new Date();
-  const lastDate = new Date(lastOrderDate);
-  const diffTime = Math.abs(today.getTime() - lastDate.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  today.setHours(0, 0, 0, 0);
+  const lastDate = parseBrazilianDate(lastOrderDate);
+  lastDate.setHours(0, 0, 0, 0);
+  const diffTime = today.getTime() - lastDate.getTime();
+  return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 };
 
 export const isActiveCustomer = (lastOrderDate: string): boolean => {
@@ -150,4 +179,27 @@ export const isActiveCustomer = (lastOrderDate: string): boolean => {
 
 export const calculateCLTV3Y = (avgRevenuePerOrder: number, avgOrdersPerYear: number, margin = 0.30): number => {
   return avgRevenuePerOrder * avgOrdersPerYear * 3 * margin;
+};
+
+export const calculateAvgDaysBetweenPurchases = (orders: TinyOrder[]): number => {
+  if (orders.length < 2) return 0;
+  
+  const sortedOrders = [...orders].sort((a, b) => 
+    parseBrazilianDate(a.order_date).getTime() - parseBrazilianDate(b.order_date).getTime()
+  );
+  
+  let totalDays = 0;
+  let gaps = 0;
+  
+  for (let i = 1; i < sortedOrders.length; i++) {
+    const prevDate = parseBrazilianDate(sortedOrders[i - 1].order_date);
+    const currDate = parseBrazilianDate(sortedOrders[i].order_date);
+    const diffDays = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      totalDays += diffDays;
+      gaps++;
+    }
+  }
+  
+  return gaps > 0 ? Math.round(totalDays / gaps) : 0;
 };

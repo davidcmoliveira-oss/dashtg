@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, User, Calendar, TrendingUp, ShoppingBag, Package, Clock, Download, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, User, Calendar, TrendingUp, ShoppingBag, Package, Clock, Download, Search, ChevronDown, ChevronUp, CreditCard, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,7 +32,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  Treemap,
 } from "recharts";
 
 interface CustomerDetailViewProps {
@@ -79,8 +78,8 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
           <Skeleton className="h-10 w-10 rounded-full" />
           <Skeleton className="h-8 w-64" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-7">
+          {Array.from({ length: 7 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
         </div>
@@ -129,7 +128,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   // Prepare time series data
   const timeSeriesData = filteredOrders.map(order => ({
     date: order.order_date,
-    value: order.net_revenue,
+    value: order.total_paid,
     items: order.items_count,
   })).sort((a, b) => parseDate(a.date).getTime() - parseDate(b.date).getTime());
 
@@ -144,7 +143,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   filteredOrders.forEach(order => {
     const date = parseDate(order.order_date);
     dayOfWeekData[date.getDay()].value++;
-    dayOfWeekData[date.getDay()].revenue += order.net_revenue;
+    dayOfWeekData[date.getDay()].revenue += order.total_paid;
   });
 
   // Prepare day of month heatmap
@@ -159,7 +158,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
     const dayIndex = date.getDate() - 1;
     if (dayIndex >= 0 && dayIndex < 31) {
       dayOfMonthData[dayIndex].value++;
-      dayOfMonthData[dayIndex].revenue += order.net_revenue;
+      dayOfMonthData[dayIndex].revenue += order.total_paid;
     }
   });
 
@@ -175,9 +174,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
     { hour: '21h-24h', start: 21, end: 24, count: 0 },
   ];
 
-  // Since we don't have time data, distribute based on typical patterns
   filteredOrders.forEach((_, idx) => {
-    // Simulate hour distribution - in real implementation would use order_time
     const simulatedHour = (idx * 3) % 24;
     const bucketIdx = Math.floor(simulatedHour / 3);
     hourBuckets[bucketIdx].count++;
@@ -188,7 +185,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   filteredOrders.forEach(order => {
     const existing = categoryMap.get(order.product_category) || { value: 0, count: 0 };
     categoryMap.set(order.product_category, {
-      value: existing.value + order.net_revenue,
+      value: existing.value + order.total_paid,
       count: existing.count + 1,
     });
   });
@@ -197,6 +194,30 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
     value: data.value,
     count: data.count,
   }));
+
+  // Top 5 Products from orders
+  const productMap = new Map<string, { name: string; qty: number; value: number; lastDate: string }>();
+  filteredOrders.forEach(order => {
+    const productName = order.product_name || `Produto ${order.order_id}`;
+    const existing = productMap.get(productName);
+    if (existing) {
+      existing.qty += order.items_count;
+      existing.value += order.total_paid;
+      if (parseDate(order.order_date) > parseDate(existing.lastDate)) {
+        existing.lastDate = order.order_date;
+      }
+    } else {
+      productMap.set(productName, {
+        name: productName,
+        qty: order.items_count,
+        value: order.total_paid,
+        lastDate: order.order_date,
+      });
+    }
+  });
+  const top5Products = Array.from(productMap.values())
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
 
   // Products table with sorting and filtering
   const filteredProducts = customer.products
@@ -252,18 +273,14 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   };
 
   const exportCSV = () => {
-    const headers = ['ID', 'Data', 'Hora', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Pagamento', 'Cidade', 'Status', 'Status Entrega'];
+    const headers = ['ID', 'Data', 'Itens', 'Valor Total', 'Pagamento', 'Status'];
     const rows = filteredOrders.map(o => [
       o.order_id,
       o.order_date,
-      '-', // order_time would go here
       o.items_count,
       o.total_paid,
-      o.net_revenue,
       o.payment_method,
-      o.shipping_city,
       o.status,
-      o.delivery_status,
     ]);
     
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -276,7 +293,6 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   };
 
   const exportPDF = () => {
-    // Simple PDF export using print
     window.print();
   };
 
@@ -299,7 +315,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                 <Calendar className="h-3 w-3 inline mr-1" />
                 Último pedido: {customer.last_order_date}
               </span>
-              <Badge variant={customer.is_active ? "default" : "secondary"}>
+              <Badge variant={customer.is_active ? "default" : "secondary"} className={customer.is_active ? "bg-accent" : ""}>
                 {customer.is_active ? "Ativo" : "Inativo"}
               </Badge>
             </div>
@@ -313,55 +329,86 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-xl border border-border bg-card p-4">
+      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-7">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <TrendingUp className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4 text-primary" />
             <span className="text-xs">Ticket Médio</span>
           </div>
           <p className="text-lg font-bold">{formatCurrency(customer.avg_ticket)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <ShoppingBag className="h-4 w-4" />
+            <ShoppingBag className="h-4 w-4 text-primary" />
             <span className="text-xs">Total Gasto</span>
           </div>
           <p className="text-lg font-bold">{formatCurrency(customer.total_spend)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Package className="h-4 w-4" />
+            <Package className="h-4 w-4 text-primary" />
             <span className="text-xs">Qtd Pedidos</span>
           </div>
           <p className="text-lg font-bold">{customer.total_orders}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Package className="h-4 w-4" />
-            <span className="text-xs">Qtd Total Itens</span>
-          </div>
-          <p className="text-lg font-bold">{customer.items_count}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <TrendingUp className="h-4 w-4" />
+            <Package className="h-4 w-4 text-primary" />
             <span className="text-xs">Média Itens/Pedido</span>
           </div>
           <p className="text-lg font-bold">{customer.avg_items_per_order.toFixed(1)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <Clock className="h-4 w-4" />
+            <Clock className="h-4 w-4 text-primary" />
             <span className="text-xs">Dias s/ Compra</span>
           </div>
           <p className="text-lg font-bold">{customer.days_since_last_purchase}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-muted-foreground mb-2">
+            <RotateCcw className="h-4 w-4 text-primary" />
+            <span className="text-xs">Média Dias entre Compras</span>
+          </div>
+          <p className="text-lg font-bold">{customer.avg_days_between_purchases || '-'}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-2 text-muted-foreground mb-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            <span className="text-xs">Pagamento Mais Usado</span>
+          </div>
+          <p className="text-sm font-bold truncate">{customer.top_payment_method || '-'}</p>
+        </div>
+      </div>
+
+      {/* Top 5 Products */}
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Package className="h-5 w-5 text-primary" />
+          Top 5 Produtos (por valor)
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-5">
+          {top5Products.length === 0 ? (
+            <p className="text-sm text-muted-foreground col-span-5 text-center py-4">Nenhum produto encontrado</p>
+          ) : (
+            top5Products.map((product, index) => (
+              <div key={product.name} className="rounded-lg bg-secondary/50 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-bold text-primary">{index + 1}º</span>
+                  <span className="text-sm font-medium truncate">{product.name}</span>
+                </div>
+                <p className="text-lg font-bold">{formatCurrency(product.value)}</p>
+                <p className="text-xs text-muted-foreground">{product.qty} un</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Time Series */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">Histórico de Compras</h3>
             <div className="flex gap-1">
@@ -423,7 +470,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
         </div>
 
         {/* Day of Week Distribution */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Heatmap - Dias da Semana</h3>
           <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -448,7 +495,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
         </div>
 
         {/* Day of Month Heatmap */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Heatmap - Dias do Mês</h3>
           <div className="grid grid-cols-7 gap-1">
             {dayOfMonthData.map(d => (
@@ -459,7 +506,6 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                   backgroundColor: d.value > 0 
                     ? `hsl(var(--primary) / ${Math.min(0.2 + (d.value / Math.max(...dayOfMonthData.map(x => x.value))) * 0.8, 1)})` 
                     : 'hsl(var(--secondary))',
-                  color: d.value > 0 ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
                 }}
                 title={`Dia ${d.day}: ${d.value} pedidos, ${formatCurrency(d.revenue)}`}
               >
@@ -470,7 +516,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
         </div>
 
         {/* Hour Histogram */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Distribuição por Horário (buckets 3h)</h3>
           <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -484,14 +530,14 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                     borderRadius: '8px',
                   }}
                 />
-                <Bar dataKey="count" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Category Distribution - Pie */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Categorias (por valor)</h3>
           <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -525,7 +571,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
         </div>
 
         {/* Category Distribution - By Count */}
-        <div className="rounded-xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Categorias (por quantidade)</h3>
           <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -539,7 +585,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                     borderRadius: '8px',
                   }}
                 />
-                <Bar dataKey="count" fill="hsl(var(--chart-3))" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -547,99 +593,101 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
       </div>
 
       {/* Products Table */}
-      <div className="rounded-xl border border-border bg-card p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold">Produtos Comprados</h3>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar produto..."
-              value={productSearch}
-              onChange={(e) => {
-                setProductSearch(e.target.value);
-                setProductPage(1);
-              }}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>SKU</TableHead>
-              <TableHead>Produto</TableHead>
-              <TableHead 
-                className="text-center cursor-pointer hover:text-foreground"
-                onClick={() => handleProductSort('qty_total')}
-              >
-                Qtd Total <SortIcon field="qty_total" />
-              </TableHead>
-              <TableHead 
-                className="text-right cursor-pointer hover:text-foreground"
-                onClick={() => handleProductSort('spend_total')}
-              >
-                Valor Total <SortIcon field="spend_total" />
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer hover:text-foreground"
-                onClick={() => handleProductSort('last_purchase_date')}
-              >
-                Última Compra <SortIcon field="last_purchase_date" />
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedProducts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                  Nenhum produto encontrado
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedProducts.map(product => (
-                <TableRow key={product.sku}>
-                  <TableCell className="font-mono text-sm">{product.sku}</TableCell>
-                  <TableCell>{product.product_name}</TableCell>
-                  <TableCell className="text-center">{product.qty_total}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(product.spend_total)}</TableCell>
-                  <TableCell>{product.last_purchase_date}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-
-        {productTotalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
-            <span className="text-sm text-muted-foreground">
-              Mostrando {(productPage - 1) * itemsPerPage + 1}-
-              {Math.min(productPage * itemsPerPage, filteredProducts.length)} de {filteredProducts.length}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={productPage === 1}
-                onClick={() => setProductPage(p => p - 1)}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={productPage === productTotalPages}
-                onClick={() => setProductPage(p => p + 1)}
-              >
-                Próximo
-              </Button>
+      {customer.products.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Produtos Comprados</h3>
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar produto..."
+                value={productSearch}
+                onChange={(e) => {
+                  setProductSearch(e.target.value);
+                  setProductPage(1);
+                }}
+                className="pl-9"
+              />
             </div>
           </div>
-        )}
-      </div>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Produto</TableHead>
+                <TableHead 
+                  className="text-center cursor-pointer hover:text-foreground"
+                  onClick={() => handleProductSort('qty_total')}
+                >
+                  Qtd Total <SortIcon field="qty_total" />
+                </TableHead>
+                <TableHead 
+                  className="text-right cursor-pointer hover:text-foreground"
+                  onClick={() => handleProductSort('spend_total')}
+                >
+                  Valor Total <SortIcon field="spend_total" />
+                </TableHead>
+                <TableHead 
+                  className="cursor-pointer hover:text-foreground"
+                  onClick={() => handleProductSort('last_purchase_date')}
+                >
+                  Última Compra <SortIcon field="last_purchase_date" />
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {paginatedProducts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    Nenhum produto encontrado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedProducts.map(product => (
+                  <TableRow key={product.sku}>
+                    <TableCell className="font-mono text-sm">{product.sku}</TableCell>
+                    <TableCell>{product.product_name}</TableCell>
+                    <TableCell className="text-center">{product.qty_total}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(product.spend_total)}</TableCell>
+                    <TableCell>{product.last_purchase_date}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+
+          {productTotalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+              <span className="text-sm text-muted-foreground">
+                Mostrando {(productPage - 1) * itemsPerPage + 1}-
+                {Math.min(productPage * itemsPerPage, filteredProducts.length)} de {filteredProducts.length}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={productPage === 1}
+                  onClick={() => setProductPage(p => p - 1)}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={productPage === productTotalPages}
+                  onClick={() => setProductPage(p => p + 1)}
+                >
+                  Próximo
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Orders Table */}
-      <div className="rounded-xl border border-border bg-card p-6">
+      <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold">Pedidos ({filteredOrders.length})</h3>
           <div className="flex gap-2">
@@ -660,12 +708,9 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
               <TableHead>ID</TableHead>
               <TableHead>Data</TableHead>
               <TableHead className="text-center">Itens</TableHead>
-              <TableHead className="text-right">Valor Bruto</TableHead>
-              <TableHead className="text-right">Valor Líquido</TableHead>
+              <TableHead className="text-right">Valor Total</TableHead>
               <TableHead>Pagamento</TableHead>
-              <TableHead>Cidade</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Entrega</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -679,16 +724,11 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                 <TableCell>{order.order_date}</TableCell>
                 <TableCell className="text-center">{order.items_count}</TableCell>
                 <TableCell className="text-right">{formatCurrency(order.total_paid)}</TableCell>
-                <TableCell className="text-right">{formatCurrency(order.net_revenue)}</TableCell>
                 <TableCell>{order.payment_method}</TableCell>
-                <TableCell>{order.shipping_city}</TableCell>
                 <TableCell>
-                  <Badge variant={order.status === 'faturado' ? 'default' : 'secondary'}>
+                  <Badge variant={order.status === 'faturado' ? 'default' : 'secondary'} className={order.status === 'faturado' ? 'bg-accent' : ''}>
                     {order.status}
                   </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">{order.delivery_status}</Badge>
                 </TableCell>
               </TableRow>
             ))}
@@ -738,7 +778,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge>{selectedOrder.status}</Badge>
+                  <Badge className={selectedOrder.status === 'faturado' ? 'bg-accent' : ''}>{selectedOrder.status}</Badge>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Forma de Pagamento</p>
@@ -752,13 +792,8 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                   <p className="text-sm text-muted-foreground">Canal</p>
                   <p className="font-medium">{selectedOrder.sales_channel}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Status Entrega</p>
-                  <Badge variant="outline">{selectedOrder.delivery_status}</Badge>
-                </div>
               </div>
 
-              {/* SKU List */}
               {selectedOrder.sku_list.length > 0 && (
                 <div className="border-t border-border pt-4">
                   <h4 className="font-medium mb-3">Itens do Pedido</h4>
@@ -776,76 +811,12 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
               <div className="border-t border-border pt-4">
                 <h4 className="font-medium mb-3">Valores</h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Valor Bruto</span>
+                  <div className="flex justify-between font-bold pt-2">
+                    <span>Valor Total</span>
                     <span>{formatCurrency(selectedOrder.total_paid)}</span>
                   </div>
-                  {selectedOrder.discount > 0 && (
-                    <div className="flex justify-between text-destructive">
-                      <span>Desconto</span>
-                      <span>-{formatCurrency(selectedOrder.discount)}</span>
-                    </div>
-                  )}
-                  {selectedOrder.tax > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Impostos</span>
-                      <span>{formatCurrency(selectedOrder.tax)}</span>
-                    </div>
-                  )}
-                  {selectedOrder.freight_cost > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Frete</span>
-                      <span>{formatCurrency(selectedOrder.freight_cost)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold pt-2 border-t border-border">
-                    <span>Valor Líquido</span>
-                    <span>{formatCurrency(selectedOrder.net_revenue)}</span>
-                  </div>
                 </div>
               </div>
-
-              <div className="border-t border-border pt-4">
-                <h4 className="font-medium mb-3">Endereço de Entrega</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cidade</span>
-                    <span>{selectedOrder.shipping_city}</span>
-                  </div>
-                  {selectedOrder.shipping_state && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estado</span>
-                      <span>{selectedOrder.shipping_state}</span>
-                    </div>
-                  )}
-                  {selectedOrder.cep && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">CEP</span>
-                      <span>{selectedOrder.cep}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {(selectedOrder.delivery_promised_date || selectedOrder.delivery_actual_date) && (
-                <div className="border-t border-border pt-4">
-                  <h4 className="font-medium mb-3">Datas de Entrega</h4>
-                  <div className="space-y-2">
-                    {selectedOrder.delivery_promised_date && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Prometida</span>
-                        <span>{selectedOrder.delivery_promised_date}</span>
-                      </div>
-                    )}
-                    {selectedOrder.delivery_actual_date && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Realizada</span>
-                        <span>{selectedOrder.delivery_actual_date}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </DialogContent>
