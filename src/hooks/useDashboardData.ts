@@ -159,8 +159,14 @@ export const useDashboardData = () => {
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
       const orderDate = parseBrazilianDate(order.order_date);
+      orderDate.setHours(0, 0, 0, 0);
       
-      if (orderDate < filters.dateStart || orderDate > filters.dateEnd) {
+      const startDate = new Date(filters.dateStart);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(filters.dateEnd);
+      endDate.setHours(23, 59, 59, 999);
+      
+      if (orderDate < startDate || orderDate > endDate) {
         return false;
       }
 
