@@ -121,7 +121,7 @@ export const useDashboardData = () => {
       return {
         order_id: `ORD-${pedido.id}`,
         order_date: orderDate,
-        order_time: '12:00', // Fallback - API não retorna horário
+        order_time: undefined, // API Tiny v2 (listagem) não retorna horário
         created_at: orderDate,
         status: normalizeStatus(pedido.situacao),
         customer_id: pedido.nome,

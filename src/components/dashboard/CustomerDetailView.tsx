@@ -527,20 +527,27 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Distribuição por Horário (buckets 3h)</h3>
           <div className="h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourBuckets}>
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {hasTimeData ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourBuckets}>
+                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                    }}
+                  />
+                  <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                <Clock className="w-4 h-4 mr-2" />
+                Horário não disponível na API de listagem do Tiny
+              </div>
+            )}
           </div>
         </div>
 
