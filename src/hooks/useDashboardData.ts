@@ -95,7 +95,7 @@ export const useDashboardData = () => {
         allOrders.push(...(data.pedidos || []));
         totalPaginas = data.numero_paginas || 1;
         pagina++;
-      } while (pagina <= totalPaginas && pagina <= 10);
+      } while (pagina <= totalPaginas && pagina <= 50);
 
       setRawOrders(allOrders);
       addLog(`Fetched ${allOrders.length} orders`);
