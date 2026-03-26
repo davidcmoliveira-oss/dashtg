@@ -162,7 +162,8 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
     }
   });
 
-  // Prepare hour histogram (buckets of 3h)
+  // Hour histogram - only available when order_time is provided by API
+  const hasTimeData = filteredOrders.some(o => o.order_time && o.order_time !== '12:00');
   const hourBuckets = [
     { hour: '00h-03h', start: 0, end: 3, count: 0 },
     { hour: '03h-06h', start: 3, end: 6, count: 0 },
@@ -174,11 +175,18 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
     { hour: '21h-24h', start: 21, end: 24, count: 0 },
   ];
 
-  filteredOrders.forEach((_, idx) => {
-    const simulatedHour = (idx * 3) % 24;
-    const bucketIdx = Math.floor(simulatedHour / 3);
-    hourBuckets[bucketIdx].count++;
-  });
+  if (hasTimeData) {
+    filteredOrders.forEach(order => {
+      if (order.order_time) {
+        const [hStr] = order.order_time.split(':');
+        const h = parseInt(hStr, 10);
+        if (!isNaN(h)) {
+          const bucketIdx = Math.min(Math.floor(h / 3), 7);
+          hourBuckets[bucketIdx].count++;
+        }
+      }
+    });
+  }
 
   // Prepare category distribution
   const categoryMap = new Map<string, { value: number; count: number }>();
@@ -519,20 +527,27 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
         <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
           <h3 className="font-semibold mb-4">Distribuição por Horário (buckets 3h)</h3>
           <div className="h-[200px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourBuckets}>
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {hasTimeData ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourBuckets}>
+                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                    }}
+                  />
+                  <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                <Clock className="w-4 h-4 mr-2" />
+                Horário não disponível na API de listagem do Tiny
+              </div>
+            )}
           </div>
         </div>
 
