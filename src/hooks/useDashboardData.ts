@@ -53,16 +53,22 @@ export const useDashboardData = () => {
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
-  const [filters, setFilters] = useState<DashboardFilters>({
-    dateStart: new Date(),
-    dateEnd: new Date(),
-    salesChannel: [],
-    paymentMethod: [],
-    productCategory: [],
-    timeRange: { start: 0, end: 24 },
-    customerId: null,
-    period: 'today',
-    granularity: 'daily',
+  const [filters, setFilters] = useState<DashboardFilters>(() => {
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    return {
+      dateStart: thirtyDaysAgo,
+      dateEnd: today,
+      salesChannel: [],
+      paymentMethod: [],
+      productCategory: [],
+      timeRange: { start: 0, end: 24 },
+      customerId: null,
+      period: 'last30',
+      granularity: 'daily',
+    };
   });
 
   const addLog = (message: string) => {
