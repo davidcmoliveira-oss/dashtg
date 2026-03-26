@@ -85,6 +85,7 @@ export const useDashboardData = () => {
       let totalPaginas = 1;
 
       do {
+        addLog(`Fetching page ${pagina}/${totalPaginas}...`);
         const { data, error: fnError } = await supabase.functions.invoke('tiny-orders', {
           body: { action: 'list', pagina, dataInicial, dataFinal },
         });
@@ -93,12 +94,12 @@ export const useDashboardData = () => {
         if (data.error) throw new Error(data.error);
 
         allOrders.push(...(data.pedidos || []));
-        totalPaginas = data.numero_paginas || 1;
+        totalPaginas = parseInt(data.numero_paginas) || 1;
         pagina++;
-      } while (pagina <= totalPaginas && pagina <= 50);
+      } while (pagina <= totalPaginas);
 
       setRawOrders(allOrders);
-      addLog(`Fetched ${allOrders.length} orders`);
+      addLog(`Fetched ${allOrders.length} orders across ${totalPaginas} pages`);
       
       return allOrders;
     } catch (err) {
