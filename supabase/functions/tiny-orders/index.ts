@@ -37,12 +37,8 @@ const fetchOrderDetails = async (token: string, ids: number[], concurrency = 5) 
         });
         if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
           const pedido = data.retorno.pedido;
-          // Log keys of first order for debugging time field
           if (Object.keys(results).length === 0) {
-            console.log('Pedido keys:', Object.keys(pedido));
-            console.log('Pedido data_pedido:', pedido.data_pedido);
-            console.log('Pedido hora:', pedido.hora);
-            console.log('Pedido data_criacao:', pedido.data_criacao);
+            console.log('FULL PEDIDO:', JSON.stringify(pedido).substring(0, 2000));
           }
           results[id] = pedido;
         }
