@@ -37,9 +37,7 @@ const fetchOrderDetails = async (token: string, ids: number[], concurrency = 5) 
         });
         if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
           const pedido = data.retorno.pedido;
-          if (Object.keys(results).length === 0) {
-            console.log('FULL PEDIDO:', JSON.stringify(pedido).substring(0, 2000));
-          }
+          // Tiny v2 API does not provide hora_pedido field
           results[id] = pedido;
         }
       } catch (e) {
