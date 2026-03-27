@@ -36,7 +36,15 @@ const fetchOrderDetails = async (token: string, ids: number[], concurrency = 5) 
           id: String(id),
         });
         if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
-          results[id] = data.retorno.pedido;
+          const pedido = data.retorno.pedido;
+          // Log keys of first order for debugging time field
+          if (Object.keys(results).length === 0) {
+            console.log('Pedido keys:', Object.keys(pedido));
+            console.log('Pedido data_pedido:', pedido.data_pedido);
+            console.log('Pedido hora:', pedido.hora);
+            console.log('Pedido data_criacao:', pedido.data_criacao);
+          }
+          results[id] = pedido;
         }
       } catch (e) {
         console.error(`Error fetching order ${id}:`, e);
