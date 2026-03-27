@@ -546,11 +546,3 @@ function updateProductMap(
   }
 }
 
-function parseBrazilianDate(dateStr: string): Date {
-  if (!dateStr) return new Date();
-  const parts = dateStr.split('/');
-  if (parts.length === 3) {
-    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-  }
-  return new Date(dateStr);
-}
