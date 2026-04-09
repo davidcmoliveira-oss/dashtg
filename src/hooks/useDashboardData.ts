@@ -105,6 +105,11 @@ export const useDashboardData = () => {
           continue;
         }
 
+        if (data?.rate_limited || data?.fallback) {
+          addLog('API bloqueada durante enriquecimento. Usando dados parciais.');
+          break;
+        }
+
         if (data?.enriched) {
           Object.assign(details, data.enriched);
         }
@@ -133,6 +138,11 @@ export const useDashboardData = () => {
         });
 
         if (fnError) throw new Error(fnError.message);
+        if (data?.rate_limited || data?.fallback) {
+          addLog('API do Tiny bloqueada por excesso de acessos. Aguarde alguns minutos e tente novamente.');
+          setError('API do Tiny temporariamente bloqueada. Aguarde alguns minutos e tente novamente.');
+          break;
+        }
         if (data.error) throw new Error(data.error);
 
         allOrders.push(...(data.pedidos || []));

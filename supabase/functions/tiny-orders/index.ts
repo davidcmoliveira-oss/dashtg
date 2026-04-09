@@ -142,6 +142,12 @@ serve(async (req) => {
 
     if (data.retorno?.status === 'Erro') {
       const erros = data.retorno.erros?.map((e: { erro: string }) => e.erro).join(', ') || 'Erro desconhecido';
+      const isRateLimited = erros.includes('Bloqueada') || erros.includes('Excedido');
+      if (isRateLimited) {
+        return new Response(JSON.stringify({ error: erros, rate_limited: true, fallback: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       throw new Error(erros);
     }
 
@@ -159,9 +165,16 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('Error in tiny-orders function:', errorMessage);
+    
+    const isRateLimited = errorMessage.includes('Bloqueada') || errorMessage.includes('Excedido');
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: errorMessage, 
+        fallback: isRateLimited,
+        rate_limited: isRateLimited,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
