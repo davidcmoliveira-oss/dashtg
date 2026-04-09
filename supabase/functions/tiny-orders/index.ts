@@ -142,6 +142,12 @@ serve(async (req) => {
 
     if (data.retorno?.status === 'Erro') {
       const erros = data.retorno.erros?.map((e: { erro: string }) => e.erro).join(', ') || 'Erro desconhecido';
+      const isRateLimited = erros.includes('Bloqueada') || erros.includes('Excedido');
+      if (isRateLimited) {
+        return new Response(JSON.stringify({ error: erros, rate_limited: true, fallback: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       throw new Error(erros);
     }
 
