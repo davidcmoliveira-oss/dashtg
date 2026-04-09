@@ -121,7 +121,7 @@ export const useDashboardData = () => {
     return details;
   }, []);
 
-  const fetchOrders = useCallback(async (dataInicial?: string, dataFinal?: string) => {
+  const fetchOrders = useCallback(async (dataInicial?: string, dataFinal?: string, forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     
@@ -130,20 +130,34 @@ export const useDashboardData = () => {
       const allOrders: TinyOrderRaw[] = [];
       let pagina = 1;
       let totalPaginas = 1;
+      let usedCache = false;
 
       do {
         addLog(`Fetching page ${pagina}/${totalPaginas}...`);
         const { data, error: fnError } = await supabase.functions.invoke('tiny-orders', {
-          body: { action: 'list', pagina, dataInicial, dataFinal },
+          body: { action: 'list', pagina, dataInicial, dataFinal, forceRefresh },
         });
 
         if (fnError) throw new Error(fnError.message);
+        
+        // Handle rate limiting — still show cached data if available
+        if (data?.rate_limited && data?.pedidos?.length > 0) {
+          addLog(`API bloqueada, usando ${data.pedidos.length} pedidos do cache (${data.cacheAge || 'desconhecido'}).`);
+          allOrders.push(...data.pedidos);
+          usedCache = true;
+          break;
+        }
         if (data?.rate_limited || data?.fallback) {
-          addLog('API do Tiny bloqueada por excesso de acessos. Aguarde alguns minutos e tente novamente.');
+          addLog('API do Tiny bloqueada e sem cache disponível. Aguarde alguns minutos.');
           setError('API do Tiny temporariamente bloqueada. Aguarde alguns minutos e tente novamente.');
           break;
         }
         if (data.error) throw new Error(data.error);
+
+        if (data.fromCache) {
+          addLog(`Usando ${data.pedidos?.length || 0} pedidos do cache.`);
+          usedCache = true;
+        }
 
         allOrders.push(...(data.pedidos || []));
         totalPaginas = parseInt(data.numero_paginas) || 1;
@@ -151,14 +165,16 @@ export const useDashboardData = () => {
       } while (pagina <= totalPaginas);
 
       setRawOrders(allOrders);
-      addLog(`Fetched ${allOrders.length} orders across ${totalPaginas} pages`);
+      addLog(`Total: ${allOrders.length} pedidos${usedCache ? ' (do cache)' : ''}`);
 
       // Step 2: Fetch details for all orders to get product names, time, payment
-      const orderIds = allOrders.map(o => o.pedido.id);
-      addLog(`Fetching details for ${orderIds.length} orders...`);
-      const details = await fetchBatchDetails(orderIds);
-      setOrderDetails(details);
-      addLog(`Enriched ${Object.keys(details).length} orders with details`);
+      if (allOrders.length > 0) {
+        const orderIds = allOrders.map(o => o.pedido.id);
+        addLog(`Buscando detalhes de ${orderIds.length} pedidos...`);
+        const details = await fetchBatchDetails(orderIds);
+        setOrderDetails(details);
+        addLog(`Enriquecidos ${Object.keys(details).length} pedidos com detalhes`);
+      }
       
       return allOrders;
     } catch (err) {
