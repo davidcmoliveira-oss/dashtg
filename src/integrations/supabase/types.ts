@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      tiny_order_details_cache: {
+        Row: {
+          desconto: number | null
+          endereco_entrega: Json | null
+          fetched_at: string
+          forma_pagamento: string | null
+          frete: number | null
+          hora: string | null
+          id: string
+          items: Json | null
+          numero_ecommerce: string | null
+          obs: string | null
+          raw_json: Json | null
+          tiny_order_id: number
+          total_produtos: number | null
+        }
+        Insert: {
+          desconto?: number | null
+          endereco_entrega?: Json | null
+          fetched_at?: string
+          forma_pagamento?: string | null
+          frete?: number | null
+          hora?: string | null
+          id?: string
+          items?: Json | null
+          numero_ecommerce?: string | null
+          obs?: string | null
+          raw_json?: Json | null
+          tiny_order_id: number
+          total_produtos?: number | null
+        }
+        Update: {
+          desconto?: number | null
+          endereco_entrega?: Json | null
+          fetched_at?: string
+          forma_pagamento?: string | null
+          frete?: number | null
+          hora?: string | null
+          id?: string
+          items?: Json | null
+          numero_ecommerce?: string | null
+          obs?: string | null
+          raw_json?: Json | null
+          tiny_order_id?: number
+          total_produtos?: number | null
+        }
+        Relationships: []
+      }
+      tiny_orders_cache: {
+        Row: {
+          codigo_rastreamento: string | null
+          data_pedido: string | null
+          fetched_at: string
+          id: string
+          nome: string | null
+          numero: number | null
+          numero_ecommerce: string | null
+          raw_json: Json | null
+          situacao: string | null
+          tiny_order_id: number
+          valor: number | null
+        }
+        Insert: {
+          codigo_rastreamento?: string | null
+          data_pedido?: string | null
+          fetched_at?: string
+          id?: string
+          nome?: string | null
+          numero?: number | null
+          numero_ecommerce?: string | null
+          raw_json?: Json | null
+          situacao?: string | null
+          tiny_order_id: number
+          valor?: number | null
+        }
+        Update: {
+          codigo_rastreamento?: string | null
+          data_pedido?: string | null
+          fetched_at?: string
+          id?: string
+          nome?: string | null
+          numero?: number | null
+          numero_ecommerce?: string | null
+          raw_json?: Json | null
+          situacao?: string | null
+          tiny_order_id?: number
+          valor?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
