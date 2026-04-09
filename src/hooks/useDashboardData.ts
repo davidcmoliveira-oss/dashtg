@@ -105,6 +105,11 @@ export const useDashboardData = () => {
           continue;
         }
 
+        if (data?.rate_limited || data?.fallback) {
+          addLog('API bloqueada durante enriquecimento. Usando dados parciais.');
+          break;
+        }
+
         if (data?.enriched) {
           Object.assign(details, data.enriched);
         }
