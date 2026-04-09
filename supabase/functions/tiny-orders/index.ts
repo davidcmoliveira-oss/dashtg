@@ -159,9 +159,16 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('Error in tiny-orders function:', errorMessage);
+    
+    const isRateLimited = errorMessage.includes('Bloqueada') || errorMessage.includes('Excedido');
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: errorMessage, 
+        fallback: isRateLimited,
+        rate_limited: isRateLimited,
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
