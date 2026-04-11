@@ -46,12 +46,13 @@ const Index = () => {
   } = useDashboardData();
 
   useEffect(() => {
-    const today = new Date();
+    const startStr = formatDate(filters.dateStart);
+    const endStr = formatDate(filters.dateEnd);
 
-    fetchOrders(formatDate(today), formatDate(today)).then(() => {
+    fetchOrders(startStr, endStr).then(() => {
       setLastUpdate(new Date());
     });
-  }, [fetchOrders]);
+  }, [fetchOrders, filters.dateStart, filters.dateEnd]);
 
   useEffect(() => {
     if (error) {
@@ -61,9 +62,10 @@ const Index = () => {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    const today = new Date();
+    const startStr = formatDate(filters.dateStart);
+    const endStr = formatDate(filters.dateEnd);
 
-    await fetchOrders(formatDate(today), formatDate(today), true);
+    await fetchOrders(startStr, endStr, true);
     setLastUpdate(new Date());
     setIsRefreshing(false);
     toast.success("Dados sincronizados", { description: "Dashboard atualizado com sucesso." });

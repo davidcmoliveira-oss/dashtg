@@ -26,7 +26,7 @@ const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay
   
   return (
     <div 
-      className="relative overflow-hidden rounded-xl border border-border bg-card p-5 animate-slide-up shadow-sm"
+      className="relative rounded-xl border border-border bg-card p-5 animate-slide-up shadow-sm"
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-primary/5 blur-2xl" />

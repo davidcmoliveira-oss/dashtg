@@ -132,14 +132,14 @@ export const useDashboardData = () => {
     return details;
   }, []);
 
-  const fetchOrders = useCallback(async (_dataInicial?: string, _dataFinal?: string, forceRefresh = false) => {
+  const fetchOrders = useCallback(async (dataInicial?: string, dataFinal?: string, forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const { start, end } = getTodayDateRange();
-      const dataInicial = formatDateToBrazilian(start);
-      const dataFinal = formatDateToBrazilian(end);
+      // Use provided dates or default to today
+      const effectiveInicial = dataInicial || formatDateToBrazilian(getTodayDateRange().start);
+      const effectiveFinal = dataFinal || formatDateToBrazilian(getTodayDateRange().end);
 
       // Step 1: Fetch all order listings
       const allOrders: TinyOrderRaw[] = [];
@@ -150,7 +150,7 @@ export const useDashboardData = () => {
       do {
         addLog(`Fetching page ${pagina}/${totalPaginas}...`);
         const { data, error: fnError } = await supabase.functions.invoke('tiny-orders', {
-          body: { action: 'list', pagina, dataInicial, dataFinal, forceRefresh },
+          body: { action: 'list', pagina, dataInicial: effectiveInicial, dataFinal: effectiveFinal, forceRefresh },
         });
 
         if (fnError) throw new Error(fnError.message);
@@ -204,7 +204,7 @@ export const useDashboardData = () => {
 
   // Transform raw orders to TinyOrder format, enriched with details
   const orders: TinyOrder[] = useMemo(() => {
-    return rawOrders.map(item => {
+    const mapped = rawOrders.map(item => {
       const pedido = item.pedido;
       const orderDate = pedido.data_pedido || '';
       const detail = orderDetails[String(pedido.id)];
@@ -270,18 +270,52 @@ export const useDashboardData = () => {
         cep,
         delivery_status: '',
         returned_flag: false,
+        _numero: pedido.numero, // Keep order number for time estimation
         // Store all items for drill-down
         _items: detail?.items || [],
-      } as TinyOrder & { _items: any[] };
+      } as TinyOrder & { _items: any[]; _numero: number };
     }).filter(order => {
       const orderDate = parseBrazilianDate(order.order_date);
       const today = new Date();
       if (orderDate > today) {
-        addLog(`Order ${order.order_id} ignored: future date ${order.order_date}`);
         return false;
       }
       return true;
     });
+
+    // Estimate order times from sequential order numbers within each day
+    // Business hours: 08:00 to 20:00 (12 hours)
+    const BUSINESS_START = 8; // 8am
+    const BUSINESS_END = 20;  // 8pm
+    const BUSINESS_HOURS = BUSINESS_END - BUSINESS_START;
+
+    const ordersByDate = new Map<string, typeof mapped>();
+    mapped.forEach(o => {
+      const key = o.order_date;
+      if (!ordersByDate.has(key)) ordersByDate.set(key, []);
+      ordersByDate.get(key)!.push(o);
+    });
+
+    ordersByDate.forEach((dayOrders) => {
+      // Only estimate for orders without existing time data
+      const needsEstimation = dayOrders.filter(o => !o.order_time);
+      if (needsEstimation.length === 0) return;
+
+      // Sort by order number
+      needsEstimation.sort((a, b) => ((a as any)._numero || 0) - ((b as any)._numero || 0));
+      const count = needsEstimation.length;
+
+      needsEstimation.forEach((order, index) => {
+        // Distribute proportionally across business hours
+        const fraction = count > 1 ? index / (count - 1) : 0.5;
+        const totalMinutes = BUSINESS_START * 60 + fraction * BUSINESS_HOURS * 60;
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = Math.floor(totalMinutes % 60);
+        order.order_time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+      });
+    });
+
+    return mapped;
   }, [rawOrders, orderDetails]);
 
   // Filter orders based on current filters
