@@ -2,6 +2,7 @@ import { DollarSign, ShoppingCart, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KPIData, TimeSeriesData } from "@/types/dashboard";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
+import { MetricTooltip } from "./MetricTooltip";
 
 interface KPICardsProps {
   kpis: KPIData;
@@ -17,9 +18,10 @@ interface KPICardProps {
   sparkline: { value: number }[];
   isLoading: boolean;
   delay?: number;
+  tooltip: string;
 }
 
-const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay = 0 }: KPICardProps) => {
+const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay = 0, tooltip }: KPICardProps) => {
   const isPositive = change >= 0;
   
   return (
@@ -28,6 +30,7 @@ const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-primary/5 blur-2xl" />
+      <MetricTooltip description={tooltip} />
       
       <div className="relative">
         <div className="flex items-center justify-between mb-4">
@@ -81,6 +84,13 @@ const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay
   );
 };
 
+const TOOLTIPS: Record<string, string> = {
+  "Receita Total": "Soma do valor total pago (total_paid) de todos os pedidos faturados no período selecionado.",
+  "Nº de Pedidos": "Quantidade total de pedidos faturados/confirmados no período. Pedidos cancelados ou pendentes não são contabilizados.",
+  "Ticket Médio": "Receita total dividida pelo número de pedidos no período. Indica o valor médio gasto por pedido.",
+  "Clientes Únicos": "Quantidade de clientes distintos que realizaram pelo menos um pedido no período selecionado.",
+};
+
 export const KPICards = ({ kpis, sparklineData, isLoading }: KPICardsProps) => {
   const formatCurrency = (value: number) => 
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -123,6 +133,7 @@ export const KPICards = ({ kpis, sparklineData, isLoading }: KPICardsProps) => {
         <KPICard
           key={card.title}
           {...card}
+          tooltip={TOOLTIPS[card.title] || ""}
           sparkline={sparklineData.map(d => ({ value: d.value }))}
           isLoading={isLoading}
           delay={index * 50}

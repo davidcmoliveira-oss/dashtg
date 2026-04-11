@@ -2,3 +2,6 @@ project_id = "xabzmirxrvffikkpzphp"
 
 [functions.tiny-orders]
 verify_jwt = false
+
+[functions.ai-insights]
+verify_jwt = false
