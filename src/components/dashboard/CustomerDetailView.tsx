@@ -340,49 +340,56 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
 
       {/* Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-7">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Ticket Médio: total gasto pelo cliente dividido pelo número total de pedidos realizados." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <TrendingUp className="h-4 w-4 text-primary" />
             <span className="text-xs">Ticket Médio</span>
           </div>
           <p className="text-lg font-bold">{formatCurrency(customer.avg_ticket)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Total Gasto: soma de todos os valores pagos (total_paid) em todos os pedidos faturados deste cliente." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <ShoppingBag className="h-4 w-4 text-primary" />
             <span className="text-xs">Total Gasto</span>
           </div>
           <p className="text-lg font-bold">{formatCurrency(customer.total_spend)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Quantidade de Pedidos: número total de pedidos faturados/confirmados realizados por este cliente." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <Package className="h-4 w-4 text-primary" />
             <span className="text-xs">Qtd Pedidos</span>
           </div>
           <p className="text-lg font-bold">{customer.total_orders}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Média de Itens por Pedido: total de itens comprados dividido pelo número de pedidos. Indica o tamanho médio do carrinho." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <Package className="h-4 w-4 text-primary" />
             <span className="text-xs">Média Itens/Pedido</span>
           </div>
           <p className="text-lg font-bold">{customer.avg_items_per_order.toFixed(1)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Dias sem Compra: número de dias desde o último pedido faturado até hoje. Quanto maior, maior o risco de churn." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <Clock className="h-4 w-4 text-primary" />
             <span className="text-xs">Dias s/ Compra</span>
           </div>
           <p className="text-lg font-bold">{customer.days_since_last_purchase}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Média de Dias entre Compras: média dos intervalos (em dias) entre pedidos consecutivos. Indica a frequência de compra do cliente." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <RotateCcw className="h-4 w-4 text-primary" />
             <span className="text-xs">Média Dias entre Compras</span>
           </div>
           <p className="text-lg font-bold">{customer.avg_days_between_purchases || '-'}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="relative rounded-xl border border-border bg-card p-4 shadow-sm">
+          <MetricTooltip description="Pagamento Mais Usado: forma de pagamento mais frequente nos pedidos deste cliente (ex: PIX, cartão, boleto)." />
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
             <CreditCard className="h-4 w-4 text-primary" />
             <span className="text-xs">Pagamento Mais Usado</span>
@@ -390,6 +397,24 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
           <p className="text-sm font-bold truncate">{customer.top_payment_method || '-'}</p>
         </div>
       </div>
+
+      {/* AI Insights */}
+      <AiInsightsPanel
+        defaultPrompt={`Analise os indicadores deste cliente: ${customer.customer_name}, ticket médio ${formatCurrency(customer.avg_ticket)}, total gasto ${formatCurrency(customer.total_spend)}, ${customer.total_orders} pedidos, última compra há ${customer.days_since_last_purchase} dias, média ${customer.avg_days_between_purchases || 'N/A'} dias entre compras. Identifique padrões de comportamento e sugestões.`}
+        contextData={{
+          nome: customer.customer_name,
+          ticket_medio: customer.avg_ticket,
+          total_gasto: customer.total_spend,
+          qtd_pedidos: customer.total_orders,
+          media_itens_pedido: customer.avg_items_per_order,
+          dias_sem_compra: customer.days_since_last_purchase,
+          media_dias_entre_compras: customer.avg_days_between_purchases,
+          pagamento_mais_usado: customer.top_payment_method,
+          ativo: customer.is_active,
+          cltv_3y: customer.cltv_3y,
+          top_5_produtos: top5Products.map(p => ({ nome: p.name, valor: p.value, qtd: p.qty })),
+        }}
+      />
 
       {/* Top 5 Products */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
