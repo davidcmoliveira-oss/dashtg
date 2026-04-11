@@ -185,31 +185,34 @@ serve(async (req) => {
         }
       }
 
-      // Determine which IDs are not cached
-      const cached = await getCachedDetails(db, batchIds);
-      const cachedMap: Record<string, any> = {};
-      const cachedIds = new Set<number>();
-      if (cached) {
-        for (const row of cached) {
-          cachedIds.add(row.tiny_order_id);
-          cachedMap[String(row.tiny_order_id)] = {
-            hora: row.hora,
-            forma_pagamento: row.forma_pagamento,
-            items: row.items,
-            frete: row.frete,
-            desconto: row.desconto,
-            total_produtos: row.total_produtos,
-            numero_ecommerce: row.numero_ecommerce,
-            obs: row.obs,
-            endereco_entrega: row.endereco_entrega,
-          };
+      // Determine which IDs are not cached (skip cache entirely when forceRefresh)
+      let uncachedIds = batchIds;
+      const enriched: Record<string, any> = {};
+
+      if (!forceRefresh) {
+        const cached = await getCachedDetails(db, batchIds);
+        const cachedIds = new Set<number>();
+        if (cached) {
+          for (const row of cached) {
+            cachedIds.add(row.tiny_order_id);
+            enriched[String(row.tiny_order_id)] = {
+              hora: row.hora,
+              forma_pagamento: row.forma_pagamento,
+              items: row.items,
+              frete: row.frete,
+              desconto: row.desconto,
+              total_produtos: row.total_produtos,
+              numero_ecommerce: row.numero_ecommerce,
+              obs: row.obs,
+              endereco_entrega: row.endereco_entrega,
+            };
+          }
         }
+        uncachedIds = batchIds.filter(id => !cachedIds.has(id));
+        console.log(`Details: ${cachedIds.size} cached, ${uncachedIds.length} to fetch`);
+      } else {
+        console.log(`Force refresh: fetching all ${batchIds.length} from API`);
       }
-
-      const uncachedIds = batchIds.filter(id => !cachedIds.has(id));
-      console.log(`Details: ${cachedIds.size} cached, ${uncachedIds.length} to fetch`);
-
-      const enriched: Record<string, any> = { ...cachedMap };
 
       if (uncachedIds.length > 0) {
         const details = await fetchOrderDetails(tinyApiToken, uncachedIds, 5);
