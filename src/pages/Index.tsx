@@ -46,12 +46,13 @@ const Index = () => {
   } = useDashboardData();
 
   useEffect(() => {
-    const today = new Date();
+    const startStr = formatDate(filters.dateStart);
+    const endStr = formatDate(filters.dateEnd);
 
-    fetchOrders(formatDate(today), formatDate(today)).then(() => {
+    fetchOrders(startStr, endStr).then(() => {
       setLastUpdate(new Date());
     });
-  }, [fetchOrders]);
+  }, [fetchOrders, filters.dateStart, filters.dateEnd]);
 
   useEffect(() => {
     if (error) {
