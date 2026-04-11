@@ -1,4 +1,4 @@
-import { Bell, Search, RefreshCw } from "lucide-react";
+import { Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -38,23 +38,6 @@ export const Header = ({ onRefresh, isRefreshing, lastUpdate }: HeaderProps) => 
           <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           Atualizar
         </Button>
-
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-medium text-destructive-foreground">
-            3
-          </span>
-        </Button>
-
-        <div className="flex items-center gap-3 border-l border-border pl-4">
-          <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-sm font-medium text-primary">AD</span>
-          </div>
-          <div className="hidden md:block">
-            <p className="text-sm font-medium">Admin</p>
-            <p className="text-xs text-muted-foreground">admin@empresa.com</p>
-          </div>
-        </div>
       </div>
     </header>
   );

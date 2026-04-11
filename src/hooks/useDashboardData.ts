@@ -57,6 +57,16 @@ const formatDateToBrazilian = (date: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
+const getTodayDateRange = () => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+};
+
 export const useDashboardData = () => {
   const [rawOrders, setRawOrders] = useState<TinyOrderRaw[]>([]);
   const [orderDetails, setOrderDetails] = useState<Record<string, EnrichedDetail>>({});
@@ -64,23 +74,31 @@ export const useDashboardData = () => {
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
-  const [filters, setFilters] = useState<DashboardFilters>(() => {
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
+  const [filters, setFiltersState] = useState<DashboardFilters>(() => {
+    const { start, end } = getTodayDateRange();
     return {
-      dateStart: thirtyDaysAgo,
-      dateEnd: today,
+      dateStart: start,
+      dateEnd: end,
       salesChannel: [],
       paymentMethod: [],
       productCategory: [],
       timeRange: { start: 0, end: 24 },
       customerId: null,
-      period: 'last30',
+      period: 'today',
       granularity: 'daily',
     };
   });
+
+  const setFilters = useCallback((nextFilters: DashboardFilters) => {
+    const { start, end } = getTodayDateRange();
+
+    setFiltersState({
+      ...nextFilters,
+      dateStart: start,
+      dateEnd: end,
+      period: 'today',
+    });
+  }, []);
 
   const addLog = (message: string) => {
     setLogs(prev => [...prev, `[${new Date().toISOString()}] ${message}`]);
@@ -121,11 +139,15 @@ export const useDashboardData = () => {
     return details;
   }, []);
 
-  const fetchOrders = useCallback(async (dataInicial?: string, dataFinal?: string, forceRefresh = false) => {
+  const fetchOrders = useCallback(async (_dataInicial?: string, _dataFinal?: string, forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     
     try {
+      const { start, end } = getTodayDateRange();
+      const dataInicial = formatDateToBrazilian(start);
+      const dataFinal = formatDateToBrazilian(end);
+
       // Step 1: Fetch all order listings
       const allOrders: TinyOrderRaw[] = [];
       let pagina = 1;

@@ -23,6 +23,13 @@ const Index = () => {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [apiConfig, setApiConfig] = useState<{ apiUrl: string; apiKey: string } | null>(null);
 
+  const formatDate = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
   const {
     orders,
     customers,
@@ -41,15 +48,8 @@ const Index = () => {
 
   useEffect(() => {
     const today = new Date();
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const formatDate = (d: Date) => {
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
-    
-    fetchOrders(formatDate(thirtyDaysAgo), formatDate(today)).then(() => {
+
+    fetchOrders(formatDate(today), formatDate(today)).then(() => {
       setLastUpdate(new Date());
     });
   }, [fetchOrders]);
@@ -67,15 +67,8 @@ const Index = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     const today = new Date();
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const formatDate = (d: Date) => {
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
-    };
-    
-    await fetchOrders(formatDate(thirtyDaysAgo), formatDate(today));
+
+    await fetchOrders(formatDate(today), formatDate(today), true);
     setLastUpdate(new Date());
     setIsRefreshing(false);
     toast({
