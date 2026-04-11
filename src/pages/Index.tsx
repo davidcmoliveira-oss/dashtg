@@ -11,7 +11,7 @@ import { CustomerDetailView } from "@/components/dashboard/CustomerDetailView";
 import { ProductsView } from "@/components/dashboard/ProductsView";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
 import { useDashboardData } from "@/hooks/useDashboardData";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -44,8 +44,6 @@ const Index = () => {
     fetchOrders,
   } = useDashboardData();
 
-  const { toast } = useToast();
-
   useEffect(() => {
     const today = new Date();
 
@@ -56,13 +54,9 @@ const Index = () => {
 
   useEffect(() => {
     if (error) {
-      toast({
-        title: "Erro ao carregar dados",
-        description: error,
-        variant: "destructive",
-      });
+      toast.error("Erro ao carregar dados", { description: error });
     }
-  }, [error, toast]);
+  }, [error]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -71,10 +65,7 @@ const Index = () => {
     await fetchOrders(formatDate(today), formatDate(today), true);
     setLastUpdate(new Date());
     setIsRefreshing(false);
-    toast({
-      title: "Dados sincronizados",
-      description: "Dashboard atualizado com sucesso.",
-    });
+    toast.success("Dados sincronizados", { description: "Dashboard atualizado com sucesso." });
   };
 
   const handleCustomerClick = (customerId: string) => {
