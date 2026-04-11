@@ -62,9 +62,10 @@ const Index = () => {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    const today = new Date();
+    const startStr = formatDate(filters.dateStart);
+    const endStr = formatDate(filters.dateEnd);
 
-    await fetchOrders(formatDate(today), formatDate(today), true);
+    await fetchOrders(startStr, endStr, true);
     setLastUpdate(new Date());
     setIsRefreshing(false);
     toast.success("Dados sincronizados", { description: "Dashboard atualizado com sucesso." });
