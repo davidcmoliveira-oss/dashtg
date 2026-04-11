@@ -15,7 +15,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { DashboardFilters } from "@/types/dashboard";
 import { format } from "date-fns";
@@ -40,51 +39,11 @@ export const GlobalFilters = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
 
-  const periodOptions = [
-    { value: 'today', label: 'Hoje' },
-    { value: 'mtd', label: 'Mês até hoje' },
-    { value: 'last30', label: 'Últimos 30 dias' },
-    { value: 'custom', label: 'Personalizado' },
-  ];
-
   const granularityOptions = [
     { value: 'daily', label: 'Diário' },
     { value: 'weekly', label: 'Semanal' },
     { value: 'monthly', label: 'Mensal' },
   ];
-
-  const handlePeriodChange = (period: string) => {
-    const today = new Date();
-    let dateStart = new Date();
-    let dateEnd = new Date();
-
-    switch (period) {
-      case 'today':
-        dateStart = today;
-        dateEnd = today;
-        break;
-      case 'mtd':
-        dateStart = new Date(today.getFullYear(), today.getMonth(), 1);
-        dateEnd = today;
-        break;
-      case 'last30':
-        dateStart = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-        dateEnd = today;
-        break;
-      case 'custom':
-        // Keep current dates for custom
-        dateStart = filters.dateStart;
-        dateEnd = filters.dateEnd;
-        break;
-    }
-
-    onFiltersChange({
-      ...filters,
-      period: period as DashboardFilters['period'],
-      dateStart,
-      dateEnd,
-    });
-  };
 
   const activeFiltersCount = [
     filters.salesChannel.length > 0,
@@ -107,60 +66,16 @@ export const GlobalFilters = ({
     c.toLowerCase().includes(customerSearch.toLowerCase())
   );
 
+  const todayLabel = `Hoje • ${format(filters.dateStart, "dd/MM/yyyy", { locale: ptBR })}`;
+
   return (
     <div className="rounded-xl border border-border bg-card p-4 mb-6 space-y-4">
       {/* Main Filters Row */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Period Selector */}
-        <Select value={filters.period} onValueChange={handlePeriodChange}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Período" />
-          </SelectTrigger>
-          <SelectContent>
-            {periodOptions.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Date Range */}
-        <div className="flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Calendar className="h-4 w-4" />
-                {format(filters.dateStart, "dd/MM/yyyy", { locale: ptBR })}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.dateStart}
-                onSelect={(date) => date && onFiltersChange({ ...filters, dateStart: date, period: 'custom' })}
-                locale={ptBR}
-              />
-            </PopoverContent>
-          </Popover>
-          <span className="text-muted-foreground">até</span>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Calendar className="h-4 w-4" />
-                {format(filters.dateEnd, "dd/MM/yyyy", { locale: ptBR })}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <CalendarComponent
-                mode="single"
-                selected={filters.dateEnd}
-                onSelect={(date) => date && onFiltersChange({ ...filters, dateEnd: date, period: 'custom' })}
-                locale={ptBR}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
+        <Button variant="outline" size="sm" className="min-w-[180px] justify-start gap-2">
+          <Calendar className="h-4 w-4" />
+          {todayLabel}
+        </Button>
 
         {/* Granularity */}
         <Select 
