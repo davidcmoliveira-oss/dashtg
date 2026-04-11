@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ArrowLeft, User, Calendar, TrendingUp, ShoppingBag, Package, Clock, Download, Search, ChevronDown, ChevronUp, CreditCard, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CustomerData, TinyOrder, ProductPurchase } from "@/types/dashboard";
+import { MetricTooltip } from "./MetricTooltip";
+import { AiInsightsPanel } from "./AiInsightsPanel";
 import {
   Area,
   AreaChart,
@@ -163,7 +165,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   });
 
   // Hour histogram - only available when order_time is provided by API
-  const hasTimeData = filteredOrders.some(o => o.order_time && o.order_time !== '12:00');
+  const hasTimeData = filteredOrders.some(o => !!o.order_time);
   const hourBuckets = [
     { hour: '00h-03h', start: 0, end: 3, count: 0 },
     { hour: '03h-06h', start: 3, end: 6, count: 0 },
