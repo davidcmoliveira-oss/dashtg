@@ -150,7 +150,7 @@ export const useDashboardData = () => {
       do {
         addLog(`Fetching page ${pagina}/${totalPaginas}...`);
         const { data, error: fnError } = await supabase.functions.invoke('tiny-orders', {
-          body: { action: 'list', pagina, dataInicial, dataFinal, forceRefresh },
+          body: { action: 'list', pagina, dataInicial: effectiveInicial, dataFinal: effectiveFinal, forceRefresh },
         });
 
         if (fnError) throw new Error(fnError.message);
