@@ -224,7 +224,8 @@ serve(async (req) => {
           if (pedido.data_faturamento) console.log(`Order ${orderId} data_faturamento:`, pedido.data_faturamento);
           if (pedido.data_envio) console.log(`Order ${orderId} data_envio:`, pedido.data_envio);
           if (pedido.parcelas) console.log(`Order ${orderId} parcelas:`, JSON.stringify(pedido.parcelas));
-          if (pedido.pagamentos_integrados) console.log(`Order ${orderId} pagamentos_integrados:`, JSON.stringify(pedido.pagamentos_integrados));
+          console.log(`Order ${orderId} parcelas:`, JSON.stringify(pedido.parcelas || []));
+          console.log(`Order ${orderId} pagamentos:`, JSON.stringify(pedido.pagamentos_integrados || []));
           const items = (pedido.itens || []).map((item: any) => {
             const i = item.item || item;
             return {
