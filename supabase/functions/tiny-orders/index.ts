@@ -218,43 +218,6 @@ serve(async (req) => {
         const details = await fetchOrderDetails(tinyApiToken, uncachedIds, 5);
 
         for (const [orderId, pedido] of Object.entries(details)) {
-          // Try V3 API to get timestamp with time
-          let orderHora: string | undefined;
-          try {
-            const v3Res = await fetch(`https://api.tiny.com.br/api3/pedidos/${orderId}`, {
-              headers: { 'Authorization': `Bearer ${tinyApiToken}` },
-            });
-            if (v3Res.ok) {
-              const v3Data = await v3Res.json();
-              const orderData = v3Data?.data || v3Data;
-              console.log(`V3 Order ${orderId} keys:`, Object.keys(orderData));
-              if (orderData?.created_at) {
-                console.log(`V3 Order ${orderId} created_at:`, orderData.created_at);
-                const ts = new Date(orderData.created_at);
-                if (!isNaN(ts.getTime())) {
-                  orderHora = `${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}`;
-                }
-              }
-              if (orderData?.hora) {
-                console.log(`V3 Order ${orderId} hora:`, orderData.hora);
-                orderHora = orderData.hora;
-              }
-              if (orderData?.data_criacao) {
-                console.log(`V3 Order ${orderId} data_criacao:`, orderData.data_criacao);
-                if (!orderHora) {
-                  const ts = new Date(orderData.data_criacao);
-                  if (!isNaN(ts.getTime())) {
-                    orderHora = `${String(ts.getHours()).padStart(2,'0')}:${String(ts.getMinutes()).padStart(2,'0')}`;
-                  }
-                }
-              }
-            } else {
-              console.log(`V3 API returned ${v3Res.status} for order ${orderId}`);
-            }
-          } catch (v3Err) {
-            console.log(`V3 API error for order ${orderId}:`, v3Err);
-          }
-
           const items = (pedido.itens || []).map((item: any) => {
             const i = item.item || item;
             return {
@@ -267,7 +230,7 @@ serve(async (req) => {
           });
 
           enriched[orderId] = {
-            hora: orderHora || pedido.hora || undefined,
+            hora: pedido.hora || undefined,
             forma_pagamento: pedido.forma_pagamento || 'Não informado',
             items,
             frete: parseFloat(pedido.valor_frete) || 0,
