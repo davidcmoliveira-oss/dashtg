@@ -220,9 +220,11 @@ serve(async (req) => {
         for (const [orderId, pedido] of Object.entries(details)) {
           // Log all available keys from Tiny API response for debugging
           console.log(`Order ${orderId} raw keys:`, Object.keys(pedido));
-          if (pedido.hora) console.log(`Order ${orderId} hora:`, pedido.hora);
           if (pedido.data_pedido) console.log(`Order ${orderId} data_pedido:`, pedido.data_pedido);
-          if (pedido.data_criacao) console.log(`Order ${orderId} data_criacao:`, pedido.data_criacao);
+          if (pedido.data_faturamento) console.log(`Order ${orderId} data_faturamento:`, pedido.data_faturamento);
+          if (pedido.data_envio) console.log(`Order ${orderId} data_envio:`, pedido.data_envio);
+          if (pedido.parcelas) console.log(`Order ${orderId} parcelas:`, JSON.stringify(pedido.parcelas));
+          if (pedido.pagamentos_integrados) console.log(`Order ${orderId} pagamentos_integrados:`, JSON.stringify(pedido.pagamentos_integrados));
           const items = (pedido.itens || []).map((item: any) => {
             const i = item.item || item;
             return {
