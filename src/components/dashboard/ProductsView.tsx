@@ -134,10 +134,6 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
 
   return (
     <div className="space-y-6 animate-slide-up">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold">Produtos</h1>
-        <p className="text-muted-foreground">Análise de produtos e Curva ABC</p>
-      </div>
 
       {/* ABC Curve Charts */}
       <div className="grid gap-6 md:grid-cols-2">

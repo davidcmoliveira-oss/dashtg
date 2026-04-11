@@ -90,14 +90,7 @@ export const useDashboardData = () => {
   });
 
   const setFilters = useCallback((nextFilters: DashboardFilters) => {
-    const { start, end } = getTodayDateRange();
-
-    setFiltersState({
-      ...nextFilters,
-      dateStart: start,
-      dateEnd: end,
-      period: 'today',
-    });
+    setFiltersState(nextFilters);
   }, []);
 
   const addLog = (message: string) => {

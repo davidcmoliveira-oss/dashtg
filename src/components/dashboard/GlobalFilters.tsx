@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, Filter, Search, X } from "lucide-react";
+import { Calendar as CalendarIcon, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,10 +15,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { DashboardFilters } from "@/types/dashboard";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { DateRange } from "react-day-picker";
 
 interface GlobalFiltersProps {
   filters: DashboardFilters;
@@ -38,12 +41,6 @@ export const GlobalFilters = ({
 }: GlobalFiltersProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
-
-  const granularityOptions = [
-    { value: 'daily', label: 'Diário' },
-    { value: 'weekly', label: 'Semanal' },
-    { value: 'monthly', label: 'Mensal' },
-  ];
 
   const activeFiltersCount = [
     filters.salesChannel.length > 0,
@@ -66,33 +63,55 @@ export const GlobalFilters = ({
     c.toLowerCase().includes(customerSearch.toLowerCase())
   );
 
-  const todayLabel = `Hoje • ${format(filters.dateStart, "dd/MM/yyyy", { locale: ptBR })}`;
+  const dateRange: DateRange = {
+    from: filters.dateStart,
+    to: filters.dateEnd,
+  };
+
+  const handleDateSelect = (range: DateRange | undefined) => {
+    if (range?.from) {
+      const start = new Date(range.from);
+      start.setHours(0, 0, 0, 0);
+      const end = range.to ? new Date(range.to) : new Date(range.from);
+      end.setHours(23, 59, 59, 999);
+      onFiltersChange({
+        ...filters,
+        dateStart: start,
+        dateEnd: end,
+        period: 'custom',
+      });
+    }
+  };
+
+  const dateLabel = filters.dateStart && filters.dateEnd
+    ? filters.dateStart.toDateString() === filters.dateEnd.toDateString()
+      ? format(filters.dateStart, "dd/MM/yyyy", { locale: ptBR })
+      : `${format(filters.dateStart, "dd/MM", { locale: ptBR })} - ${format(filters.dateEnd, "dd/MM/yyyy", { locale: ptBR })}`
+    : "Selecionar data";
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 mb-6 space-y-4">
       {/* Main Filters Row */}
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="outline" size="sm" className="min-w-[180px] justify-start gap-2">
-          <Calendar className="h-4 w-4" />
-          {todayLabel}
-        </Button>
-
-        {/* Granularity */}
-        <Select 
-          value={filters.granularity} 
-          onValueChange={(v) => onFiltersChange({ ...filters, granularity: v as DashboardFilters['granularity'] })}
-        >
-          <SelectTrigger className="w-[120px]">
-            <SelectValue placeholder="Granularidade" />
-          </SelectTrigger>
-          <SelectContent>
-            {granularityOptions.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="min-w-[180px] justify-start gap-2">
+              <CalendarIcon className="h-4 w-4" />
+              {dateLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="range"
+              selected={dateRange}
+              onSelect={handleDateSelect}
+              numberOfMonths={2}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+              locale={ptBR}
+            />
+          </PopoverContent>
+        </Popover>
 
         {/* Expand Filters Button */}
         <Button
