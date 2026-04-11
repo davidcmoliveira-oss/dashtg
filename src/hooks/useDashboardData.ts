@@ -132,14 +132,14 @@ export const useDashboardData = () => {
     return details;
   }, []);
 
-  const fetchOrders = useCallback(async (_dataInicial?: string, _dataFinal?: string, forceRefresh = false) => {
+  const fetchOrders = useCallback(async (dataInicial?: string, dataFinal?: string, forceRefresh = false) => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const { start, end } = getTodayDateRange();
-      const dataInicial = formatDateToBrazilian(start);
-      const dataFinal = formatDateToBrazilian(end);
+      // Use provided dates or default to today
+      const effectiveInicial = dataInicial || formatDateToBrazilian(getTodayDateRange().start);
+      const effectiveFinal = dataFinal || formatDateToBrazilian(getTodayDateRange().end);
 
       // Step 1: Fetch all order listings
       const allOrders: TinyOrderRaw[] = [];
