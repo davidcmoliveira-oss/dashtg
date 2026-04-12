@@ -98,24 +98,39 @@ export const useDashboardData = () => {
     setLogs(prev => [...prev, `[${new Date().toISOString()}] ${message}`]);
   };
 
-  // Read orders from local DB cache
+  // Read orders from local DB cache (paginated to get ALL rows)
   const loadFromCache = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       addLog('Carregando dados do banco local...');
 
-      // Fetch all cached orders (no TTL filter - we want everything)
-      const { data: ordersData, error: ordersErr } = await supabase
-        .from('tiny_orders_cache')
-        .select('*')
-        .order('tiny_order_id', { ascending: false })
-        .limit(5000);
+      // Fetch ALL cached orders using pagination
+      const PAGE_SIZE = 1000;
+      let allOrders: CachedOrder[] = [];
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data: chunk, error: ordersErr } = await supabase
+          .from('tiny_orders_cache')
+          .select('*')
+          .order('tiny_order_id', { ascending: false })
+          .range(from, to);
 
-      if (ordersErr) throw new Error(ordersErr.message);
+        if (ordersErr) throw new Error(ordersErr.message);
+        if (chunk && chunk.length > 0) {
+          allOrders = allOrders.concat(chunk);
+          page++;
+          if (chunk.length < PAGE_SIZE) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
 
-      setCachedOrders(ordersData || []);
-      addLog(`Carregados ${ordersData?.length || 0} pedidos do cache`);
+      setCachedOrders(allOrders);
+      addLog(`Carregados ${allOrders.length} pedidos do cache`);
 
       // Fetch all cached details
       if (ordersData && ordersData.length > 0) {
