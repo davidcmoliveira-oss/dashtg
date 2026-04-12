@@ -133,8 +133,8 @@ export const useDashboardData = () => {
       addLog(`Carregados ${allOrders.length} pedidos do cache`);
 
       // Fetch all cached details
-      if (ordersData && ordersData.length > 0) {
-        const allIds = ordersData.map(o => o.tiny_order_id);
+      if (allOrders.length > 0) {
+        const allIds = allOrders.map(o => o.tiny_order_id);
         
         // Fetch in chunks of 500 (supabase .in() limit)
         const detailsMap = new Map<number, CachedDetail>();
