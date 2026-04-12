@@ -76,7 +76,7 @@ export const useDashboardData = () => {
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [filters, setFiltersState] = useState<DashboardFilters>(() => {
-    const { start, end } = getTodayDateRange();
+    const { start, end } = getDefaultDateRange();
     return {
       dateStart: start,
       dateEnd: end,
