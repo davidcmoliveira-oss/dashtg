@@ -56,11 +56,12 @@ const formatDateToBrazilian = (date: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
-const getTodayDateRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+const getDefaultDateRange = () => {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - 30);
+  start.setHours(0, 0, 0, 0);
   return { start, end };
 };
 
@@ -75,7 +76,7 @@ export const useDashboardData = () => {
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [filters, setFiltersState] = useState<DashboardFilters>(() => {
-    const { start, end } = getTodayDateRange();
+    const { start, end } = getDefaultDateRange();
     return {
       dateStart: start,
       dateEnd: end,
@@ -84,7 +85,7 @@ export const useDashboardData = () => {
       productCategory: [],
       timeRange: { start: 0, end: 24 },
       customerId: null,
-      period: 'today',
+      period: 'last30',
       granularity: 'daily',
     };
   });
@@ -97,28 +98,43 @@ export const useDashboardData = () => {
     setLogs(prev => [...prev, `[${new Date().toISOString()}] ${message}`]);
   };
 
-  // Read orders from local DB cache
+  // Read orders from local DB cache (paginated to get ALL rows)
   const loadFromCache = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
       addLog('Carregando dados do banco local...');
 
-      // Fetch all cached orders (no TTL filter - we want everything)
-      const { data: ordersData, error: ordersErr } = await supabase
-        .from('tiny_orders_cache')
-        .select('*')
-        .order('tiny_order_id', { ascending: false })
-        .limit(5000);
+      // Fetch ALL cached orders using pagination
+      const PAGE_SIZE = 1000;
+      let allOrders: CachedOrder[] = [];
+      let page = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data: chunk, error: ordersErr } = await supabase
+          .from('tiny_orders_cache')
+          .select('*')
+          .order('tiny_order_id', { ascending: false })
+          .range(from, to);
 
-      if (ordersErr) throw new Error(ordersErr.message);
+        if (ordersErr) throw new Error(ordersErr.message);
+        if (chunk && chunk.length > 0) {
+          allOrders = allOrders.concat(chunk);
+          page++;
+          if (chunk.length < PAGE_SIZE) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
 
-      setCachedOrders(ordersData || []);
-      addLog(`Carregados ${ordersData?.length || 0} pedidos do cache`);
+      setCachedOrders(allOrders);
+      addLog(`Carregados ${allOrders.length} pedidos do cache`);
 
       // Fetch all cached details
-      if (ordersData && ordersData.length > 0) {
-        const allIds = ordersData.map(o => o.tiny_order_id);
+      if (allOrders.length > 0) {
+        const allIds = allOrders.map(o => o.tiny_order_id);
         
         // Fetch in chunks of 500 (supabase .in() limit)
         const detailsMap = new Map<number, CachedDetail>();
