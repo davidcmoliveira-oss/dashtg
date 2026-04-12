@@ -41,18 +41,20 @@ const Index = () => {
     filters,
     setFilters,
     isLoading,
+    isSyncing,
     error,
     fetchOrders,
+    triggerSync,
+    lastSyncTime,
   } = useDashboardData();
 
+  // No need to fetch on filter change - data is already loaded from cache
+  // Filters are applied client-side via useMemo in useDashboardData
   useEffect(() => {
-    const startStr = formatDate(filters.dateStart);
-    const endStr = formatDate(filters.dateEnd);
-
-    fetchOrders(startStr, endStr).then(() => {
-      setLastUpdate(new Date());
-    });
-  }, [fetchOrders, filters.dateStart, filters.dateEnd]);
+    if (lastSyncTime) {
+      setLastUpdate(lastSyncTime);
+    }
+  }, [lastSyncTime]);
 
   useEffect(() => {
     if (error) {
@@ -62,10 +64,7 @@ const Index = () => {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    const startStr = formatDate(filters.dateStart);
-    const endStr = formatDate(filters.dateEnd);
-
-    await fetchOrders(startStr, endStr, true);
+    await triggerSync('incremental');
     setLastUpdate(new Date());
     setIsRefreshing(false);
     toast.success("Dados sincronizados", { description: "Dashboard atualizado com sucesso." });

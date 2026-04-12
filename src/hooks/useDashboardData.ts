@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   TinyOrder,
@@ -15,30 +15,29 @@ import {
   ProductPurchase,
 } from "@/types/dashboard";
 
-interface TinyOrderRaw {
-  pedido: {
-    id: number;
-    numero: number;
-    numero_ecommerce?: string;
-    data_pedido: string;
-    data_prevista?: string;
-    nome: string;
-    valor: number;
-    id_vendedor?: number;
-    nome_vendedor?: string;
-    situacao: string;
-    codigo_rastreamento?: string;
-  };
+interface CachedOrder {
+  tiny_order_id: number;
+  numero: number | null;
+  data_pedido: string | null;
+  nome: string | null;
+  valor: number | null;
+  situacao: string | null;
+  codigo_rastreamento: string | null;
+  raw_json: any;
+  fetched_at: string;
 }
 
-interface EnrichedDetail {
-  hora?: string;
-  forma_pagamento: string;
-  items: { sku: string; product_name: string; qty: number; unit_price: number; total: number }[];
-  frete: number;
-  desconto: number;
-  total_produtos: number;
-  endereco_entrega?: { cidade: string; uf: string; cep: string } | null;
+interface CachedDetail {
+  tiny_order_id: number;
+  hora: string | null;
+  forma_pagamento: string | null;
+  items: any[] | null;
+  frete: number | null;
+  desconto: number | null;
+  total_produtos: number | null;
+  numero_ecommerce: string | null;
+  obs: string | null;
+  endereco_entrega: any | null;
 }
 
 const parseBrazilianDate = (dateStr: string): Date => {
@@ -60,19 +59,20 @@ const formatDateToBrazilian = (date: Date): string => {
 const getTodayDateRange = () => {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-
   const end = new Date();
   end.setHours(23, 59, 59, 999);
-
   return { start, end };
 };
 
 export const useDashboardData = () => {
-  const [rawOrders, setRawOrders] = useState<TinyOrderRaw[]>([]);
-  const [orderDetails, setOrderDetails] = useState<Record<string, EnrichedDetail>>({});
+  const [cachedOrders, setCachedOrders] = useState<CachedOrder[]>([]);
+  const [cachedDetails, setCachedDetails] = useState<Map<number, CachedDetail>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [filters, setFiltersState] = useState<DashboardFilters>(() => {
     const { start, end } = getTodayDateRange();
@@ -97,119 +97,114 @@ export const useDashboardData = () => {
     setLogs(prev => [...prev, `[${new Date().toISOString()}] ${message}`]);
   };
 
-  // Fetch details in batches of 20
-  const fetchBatchDetails = useCallback(async (allIds: number[]) => {
-    const details: Record<string, EnrichedDetail> = {};
-    const batchSize = 20;
-
-    for (let i = 0; i < allIds.length; i += batchSize) {
-      const batch = allIds.slice(i, i + batchSize);
-      addLog(`Fetching details batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(allIds.length / batchSize)} (${batch.length} orders)...`);
-      
-      try {
-        const { data, error: fnError } = await supabase.functions.invoke('tiny-orders', {
-          body: { action: 'batch-details', ids: batch },
-        });
-
-        if (fnError) {
-          addLog(`Batch error: ${fnError.message}`);
-          continue;
-        }
-
-        if (data?.rate_limited || data?.fallback) {
-          addLog('API bloqueada durante enriquecimento. Usando dados parciais.');
-          break;
-        }
-
-        if (data?.enriched) {
-          Object.assign(details, data.enriched);
-        }
-      } catch (err) {
-        addLog(`Batch fetch error: ${err instanceof Error ? err.message : 'unknown'}`);
-      }
-    }
-
-    return details;
-  }, []);
-
-  const fetchOrders = useCallback(async (dataInicial?: string, dataFinal?: string, forceRefresh = false) => {
+  // Read orders from local DB cache
+  const loadFromCache = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
     try {
-      // Use provided dates or default to today
-      const effectiveInicial = dataInicial || formatDateToBrazilian(getTodayDateRange().start);
-      const effectiveFinal = dataFinal || formatDateToBrazilian(getTodayDateRange().end);
+      addLog('Carregando dados do banco local...');
 
-      // Step 1: Fetch all order listings
-      const allOrders: TinyOrderRaw[] = [];
-      let pagina = 1;
-      let totalPaginas = 1;
-      let usedCache = false;
+      // Fetch all cached orders (no TTL filter - we want everything)
+      const { data: ordersData, error: ordersErr } = await supabase
+        .from('tiny_orders_cache')
+        .select('*')
+        .order('tiny_order_id', { ascending: false })
+        .limit(5000);
 
-      do {
-        addLog(`Fetching page ${pagina}/${totalPaginas}...`);
-        const { data, error: fnError } = await supabase.functions.invoke('tiny-orders', {
-          body: { action: 'list', pagina, dataInicial: effectiveInicial, dataFinal: effectiveFinal, forceRefresh },
-        });
+      if (ordersErr) throw new Error(ordersErr.message);
 
-        if (fnError) throw new Error(fnError.message);
+      setCachedOrders(ordersData || []);
+      addLog(`Carregados ${ordersData?.length || 0} pedidos do cache`);
+
+      // Fetch all cached details
+      if (ordersData && ordersData.length > 0) {
+        const allIds = ordersData.map(o => o.tiny_order_id);
         
-        // Handle rate limiting — still show cached data if available
-        if (data?.rate_limited && data?.pedidos?.length > 0) {
-          addLog(`API bloqueada, usando ${data.pedidos.length} pedidos do cache (${data.cacheAge || 'desconhecido'}).`);
-          allOrders.push(...data.pedidos);
-          usedCache = true;
-          break;
+        // Fetch in chunks of 500 (supabase .in() limit)
+        const detailsMap = new Map<number, CachedDetail>();
+        for (let i = 0; i < allIds.length; i += 500) {
+          const chunk = allIds.slice(i, i + 500);
+          const { data: detailsData, error: detailsErr } = await supabase
+            .from('tiny_order_details_cache')
+            .select('*')
+            .in('tiny_order_id', chunk);
+
+          if (detailsErr) {
+            console.error('Details fetch error:', detailsErr.message);
+            continue;
+          }
+          (detailsData || []).forEach(d => detailsMap.set(d.tiny_order_id, d as CachedDetail));
         }
-        if (data?.rate_limited || data?.fallback) {
-          addLog('API do Tiny bloqueada e sem cache disponível. Aguarde alguns minutos.');
-          setError('API do Tiny temporariamente bloqueada. Aguarde alguns minutos e tente novamente.');
-          break;
-        }
-        if (data.error) throw new Error(data.error);
-
-        if (data.fromCache) {
-          addLog(`Usando ${data.pedidos?.length || 0} pedidos do cache.`);
-          usedCache = true;
-        }
-
-        allOrders.push(...(data.pedidos || []));
-        totalPaginas = parseInt(data.numero_paginas) || 1;
-        pagina++;
-      } while (pagina <= totalPaginas);
-
-      setRawOrders(allOrders);
-      addLog(`Total: ${allOrders.length} pedidos${usedCache ? ' (do cache)' : ''}`);
-
-      // Step 2: Fetch details for all orders to get product names, time, payment
-      if (allOrders.length > 0) {
-        const orderIds = allOrders.map(o => o.pedido.id);
-        addLog(`Buscando detalhes de ${orderIds.length} pedidos...`);
-        const details = await fetchBatchDetails(orderIds);
-        setOrderDetails(details);
-        addLog(`Enriquecidos ${Object.keys(details).length} pedidos com detalhes`);
+        setCachedDetails(detailsMap);
+        addLog(`Carregados ${detailsMap.size} detalhes do cache`);
       }
-      
-      return allOrders;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao buscar pedidos';
+      const message = err instanceof Error ? err.message : 'Erro ao carregar cache';
       setError(message);
-      addLog(`Error: ${message}`);
-      return [];
+      addLog(`Erro: ${message}`);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchBatchDetails]);
+  }, []);
 
-  // Transform raw orders to TinyOrder format, enriched with details
+  // Trigger sync via edge function
+  const triggerSync = useCallback(async (mode: 'full' | 'incremental' = 'incremental') => {
+    setIsSyncing(true);
+    addLog(`Iniciando sincronização ${mode}...`);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('tiny-sync', {
+        body: { mode },
+      });
+
+      if (fnError) throw new Error(fnError.message);
+      if (data?.error) throw new Error(data.error);
+
+      addLog(`Sync completo: ${data.orders_synced} pedidos${data.rate_limited ? ' (rate limited)' : ''}`);
+      setLastSyncTime(new Date());
+
+      // Reload from cache after sync
+      await loadFromCache();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro na sincronização';
+      addLog(`Sync erro: ${message}`);
+      // Don't set error state for background sync failures
+      if (mode === 'full') setError(message);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [loadFromCache]);
+
+  // fetchOrders for backwards compatibility - now just loads from cache
+  const fetchOrders = useCallback(async (_dataInicial?: string, _dataFinal?: string, forceRefresh = false) => {
+    if (forceRefresh) {
+      await triggerSync('incremental');
+    } else {
+      await loadFromCache();
+    }
+    return [];
+  }, [triggerSync, loadFromCache]);
+
+  // Initial load from cache + set up 5-minute auto-sync
+  useEffect(() => {
+    loadFromCache();
+
+    // Auto-sync every 5 minutes
+    syncIntervalRef.current = setInterval(() => {
+      addLog('Auto-sync (5 min)...');
+      triggerSync('incremental');
+    }, 5 * 60 * 1000);
+
+    return () => {
+      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+    };
+  }, [loadFromCache, triggerSync]);
+
+  // Transform cached data to TinyOrder format
   const orders: TinyOrder[] = useMemo(() => {
-    const mapped = rawOrders.map(item => {
-      const pedido = item.pedido;
-      const orderDate = pedido.data_pedido || '';
-      const detail = orderDetails[String(pedido.id)];
+    const mapped = cachedOrders.map(cached => {
+      const detail = cachedDetails.get(cached.tiny_order_id);
+      const orderDate = cached.data_pedido || '';
 
-      // Build product name from items
       let productName = 'Sem nome';
       let productCategory = 'Sem categoria';
       let itemsCount = 1;
@@ -225,15 +220,14 @@ export const useDashboardData = () => {
       if (detail) {
         orderTime = detail.hora || undefined;
         paymentMethod = detail.forma_pagamento || 'Não informado';
-        discount = detail.desconto || 0;
-        freightCost = detail.frete || 0;
+        discount = Number(detail.desconto) || 0;
+        freightCost = Number(detail.frete) || 0;
 
-        if (detail.items && detail.items.length > 0) {
-          productName = detail.items.map(i => i.product_name).join(', ');
-          skuList = detail.items.map(i => i.sku).filter(Boolean);
-          itemsCount = detail.items.reduce((sum, i) => sum + i.qty, 0);
-          // Use first item's name as primary product name for grouping
-          productName = detail.items[0].product_name || 'Sem nome';
+        const items = detail.items || [];
+        if (items.length > 0) {
+          productName = items[0].product_name || 'Sem nome';
+          skuList = items.map((i: any) => i.sku).filter(Boolean);
+          itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
         }
 
         if (detail.endereco_entrega) {
@@ -243,17 +237,19 @@ export const useDashboardData = () => {
         }
       }
 
-      const netRevenue = (pedido.valor || 0) - discount - freightCost;
+      const valor = Number(cached.valor) || 0;
+      const netRevenue = valor - discount - freightCost;
+      const vendedor = cached.raw_json?.pedido?.nome_vendedor || 'site';
 
       return {
-        order_id: `ORD-${pedido.id}`,
+        order_id: `ORD-${cached.tiny_order_id}`,
         order_date: orderDate,
         order_time: orderTime,
         created_at: orderDate,
-        status: normalizeStatus(pedido.situacao),
-        customer_id: pedido.nome,
-        customer_name: pedido.nome || 'Cliente não informado',
-        total_paid: pedido.valor || 0,
+        status: normalizeStatus(cached.situacao || ''),
+        customer_id: cached.nome || '',
+        customer_name: cached.nome || 'Cliente não informado',
+        total_paid: valor,
         discount,
         tax: 0,
         freight_cost: freightCost,
@@ -263,30 +259,26 @@ export const useDashboardData = () => {
         product_name: productName,
         product_category: productCategory,
         product_brand: 'Sem marca',
-        sales_channel: normalizeChannel(pedido.nome_vendedor || 'site'),
+        sales_channel: normalizeChannel(vendedor),
         payment_method: paymentMethod,
         shipping_state: shippingState,
         shipping_city: shippingCity,
         cep,
         delivery_status: '',
         returned_flag: false,
-        _numero: pedido.numero, // Keep order number for time estimation
-        // Store all items for drill-down
+        _numero: cached.numero || 0,
         _items: detail?.items || [],
       } as TinyOrder & { _items: any[]; _numero: number };
     }).filter(order => {
+      if (!order.order_date) return false;
       const orderDate = parseBrazilianDate(order.order_date);
       const today = new Date();
-      if (orderDate > today) {
-        return false;
-      }
-      return true;
+      return orderDate <= today;
     });
 
     // Estimate order times from sequential order numbers within each day
-    // Business hours: 08:00 to 20:00 (12 hours)
-    const BUSINESS_START = 8; // 8am
-    const BUSINESS_END = 20;  // 8pm
+    const BUSINESS_START = 8;
+    const BUSINESS_END = 20;
     const BUSINESS_HOURS = BUSINESS_END - BUSINESS_START;
 
     const ordersByDate = new Map<string, typeof mapped>();
@@ -297,16 +289,11 @@ export const useDashboardData = () => {
     });
 
     ordersByDate.forEach((dayOrders) => {
-      // Only estimate for orders without existing time data
       const needsEstimation = dayOrders.filter(o => !o.order_time);
       if (needsEstimation.length === 0) return;
-
-      // Sort by order number
       needsEstimation.sort((a, b) => ((a as any)._numero || 0) - ((b as any)._numero || 0));
       const count = needsEstimation.length;
-
       needsEstimation.forEach((order, index) => {
-        // Distribute proportionally across business hours
         const fraction = count > 1 ? index / (count - 1) : 0.5;
         const totalMinutes = BUSINESS_START * 60 + fraction * BUSINESS_HOURS * 60;
         const hours = Math.floor(totalMinutes / 60);
@@ -316,7 +303,7 @@ export const useDashboardData = () => {
     });
 
     return mapped;
-  }, [rawOrders, orderDetails]);
+  }, [cachedOrders, cachedDetails]);
 
   // Filter orders based on current filters
   const filteredOrders = useMemo(() => {
@@ -335,7 +322,6 @@ export const useDashboardData = () => {
       if (filters.productCategory.length > 0 && !filters.productCategory.includes(order.product_category)) return false;
       if (filters.customerId && order.customer_id !== filters.customerId) return false;
 
-      // Time filter
       if (order.order_time && filters.timeRange) {
         const [h] = order.order_time.split(':').map(Number);
         if (h < filters.timeRange.start || h >= filters.timeRange.end) return false;
@@ -389,7 +375,6 @@ export const useDashboardData = () => {
         });
       }
 
-      // Aggregate products per customer from _items
       const items = (order as any)._items || [];
       const data = customerMap.get(order.customer_id)!;
       items.forEach((item: any) => {
@@ -435,7 +420,6 @@ export const useDashboardData = () => {
         }
       });
 
-      // Top 5 products by value
       const productsList = Array.from(data.productMap.values())
         .sort((a, b) => b.spend_total - a.spend_total);
 
@@ -460,26 +444,15 @@ export const useDashboardData = () => {
     }).sort((a, b) => b.total_spend - a.total_spend);
   }, [filteredOrders]);
 
-  // Products data - aggregate from all order items
+  // Products data
   const products: ProductData[] = useMemo(() => {
-    const productMap = new Map<string, {
-      name: string;
-      qty: number;
-      revenue: number;
-      orders: number;
-      lastSale: string;
-      customers: Set<string>;
-      weekdaySales: number[];
-      monthdaySales: number[];
-      saleDates: Date[];
-    }>();
+    const productMap = new Map<string, any>();
 
     filteredOrders.forEach(order => {
       const items = (order as any)._items || [];
       const orderDate = parseBrazilianDate(order.order_date);
 
       if (items.length === 0) {
-        // Fallback: use order-level product info
         const productKey = order.product_name || `Produto ${order.order_id}`;
         updateProductMap(productMap, productKey, productKey, order.items_count, order.total_paid, order.customer_id, orderDate, order.order_date);
       } else {
@@ -490,13 +463,8 @@ export const useDashboardData = () => {
       }
     });
 
-    // ABC classification
     const productsList = Array.from(productMap.entries())
-      .map(([sku, data]) => ({
-        sku,
-        ...data,
-        customersArray: Array.from(data.customers),
-      }))
+      .map(([sku, data]) => ({ sku, ...data, customersArray: Array.from(data.customers) }))
       .sort((a, b) => b.revenue - a.revenue);
 
     const totalRevenue = productsList.reduce((sum, p) => sum + p.revenue, 0);
@@ -510,7 +478,7 @@ export const useDashboardData = () => {
       if (cumulativePercent <= 80) abcClass = 'A';
       else if (cumulativePercent <= 95) abcClass = 'B';
 
-      const sortedDates = [...p.saleDates].sort((a, b) => a.getTime() - b.getTime());
+      const sortedDates = [...p.saleDates].sort((a: Date, b: Date) => a.getTime() - b.getTime());
       let maxGap = 0;
       for (let i = 1; i < sortedDates.length; i++) {
         const gap = Math.floor((sortedDates[i].getTime() - sortedDates[i-1].getTime()) / (1000 * 60 * 60 * 24));
@@ -541,7 +509,6 @@ export const useDashboardData = () => {
   // Time series data
   const timeSeriesData = useMemo(() => {
     const dataMap = new Map<string, { value: number; items: number }>();
-    
     filteredOrders.forEach(order => {
       const dateKey = order.order_date;
       const existing = dataMap.get(dateKey) || { value: 0, items: 0 };
@@ -573,9 +540,12 @@ export const useDashboardData = () => {
     filters,
     setFilters,
     isLoading,
+    isSyncing,
     error,
     logs,
     fetchOrders,
+    triggerSync,
+    lastSyncTime,
   };
 };
 
@@ -608,17 +578,12 @@ function updateProductMap(
     weekdaySales[orderDate.getDay()] = 1;
     monthdaySales[orderDate.getDate() - 1] = 1;
     map.set(key, {
-      name,
-      qty,
-      revenue,
-      orders: 1,
+      name, qty, revenue, orders: 1,
       lastSale: orderDateStr,
       customers: new Set([customerId]),
-      weekdaySales,
-      monthdaySales,
+      weekdaySales, monthdaySales,
       saleDates: [orderDate],
     });
   }
 }
-// force rebuild
 
