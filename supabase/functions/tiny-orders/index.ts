@@ -40,6 +40,47 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
+const parseBrazilianDate = (value?: string | null) => {
+  if (!value) return null;
+  const [day, month, year] = value.split('/').map(Number);
+  if (!day || !month || !year) return null;
+  return new Date(year, month - 1, day);
+};
+
+const filterCachedOrdersByRange = (rows: any[], dataInicial?: string, dataFinal?: string) => {
+  const startDate = parseBrazilianDate(dataInicial);
+  const endDate = parseBrazilianDate(dataFinal);
+
+  if (startDate) startDate.setHours(0, 0, 0, 0);
+  if (endDate) endDate.setHours(23, 59, 59, 999);
+
+  if (!startDate && !endDate) return rows;
+
+  return rows.filter((row: any) => {
+    const rawDate = row.data_pedido || row.raw_json?.pedido?.data_pedido;
+    const orderDate = parseBrazilianDate(rawDate);
+
+    if (!orderDate) return false;
+    if (startDate && orderDate < startDate) return false;
+    if (endDate && orderDate > endDate) return false;
+
+    return true;
+  });
+};
+
+const buildCachedOrdersResponse = (rows: any[], dataInicial?: string, dataFinal?: string) => {
+  const filteredRows = filterCachedOrdersByRange(rows, dataInicial, dataFinal);
+
+  return jsonResponse({
+    status: 'OK',
+    pagina: 1,
+    numero_paginas: 1,
+    pedidos: filteredRows.map((row: any) => row.raw_json),
+    fromCache: true,
+    cacheAge: filteredRows[0]?.fetched_at || rows[0]?.fetched_at,
+  });
+};
+
 // ── Cache helpers ──
 
 const getCachedOrders = async (db: ReturnType<typeof getSupabaseAdmin>) => {
@@ -261,19 +302,11 @@ serve(async (req) => {
 
     // ── LIST ORDERS ──
     // Check cache first (only for non-forced, non-paginated initial requests)
-    if (action === 'list' && !forceRefresh) {
+    if (action === 'list' && !forceRefresh && !dataInicial && !dataFinal) {
       const cachedOrders = await getCachedOrders(db);
       if (cachedOrders && cachedOrders.length > 0) {
         console.log(`Returning ${cachedOrders.length} orders from cache`);
-        const pedidos = cachedOrders.map(row => row.raw_json);
-        return jsonResponse({
-          status: 'OK',
-          pagina: 1,
-          numero_paginas: 1,
-          pedidos,
-          fromCache: true,
-          cacheAge: cachedOrders[0]?.fetched_at,
-        });
+        return buildCachedOrdersResponse(cachedOrders);
       }
     }
 
@@ -305,7 +338,7 @@ serve(async (req) => {
     }
 
     console.log(`Fetching from Tiny API V2: ${endpoint}`);
-    console.log(`Request params: pagina=${pagina}`);
+    console.log(`Request params: pagina=${pagina}, dataInicial=${dataInicial || '-'}, dataFinal=${dataFinal || '-'}`);
 
     const data = await tinyPost(endpoint, formParams);
     console.log('Tiny API Response status:', data.retorno?.status);
@@ -317,14 +350,12 @@ serve(async (req) => {
         const cachedOrders = await getCachedOrders(db);
         if (cachedOrders && cachedOrders.length > 0) {
           console.log(`Rate limited but returning ${cachedOrders.length} orders from cache as fallback`);
+          const response = buildCachedOrdersResponse(cachedOrders, dataInicial, dataFinal);
+          const payload = await response.json();
+
           return jsonResponse({
-            status: 'OK',
-            pagina: 1,
-            numero_paginas: 1,
-            pedidos: cachedOrders.map(row => row.raw_json),
-            fromCache: true,
+            ...payload,
             rate_limited: true,
-            cacheAge: cachedOrders[0]?.fetched_at,
           });
         }
         return jsonResponse({ error: erros, rate_limited: true, fallback: true });
@@ -357,14 +388,12 @@ serve(async (req) => {
         const db = getSupabaseAdmin();
         const cachedOrders = await getCachedOrders(db);
         if (cachedOrders && cachedOrders.length > 0) {
+          const response = buildCachedOrdersResponse(cachedOrders, dataInicial, dataFinal);
+          const payload = await response.json();
+
           return jsonResponse({
-            status: 'OK',
-            pagina: 1,
-            numero_paginas: 1,
-            pedidos: cachedOrders.map(row => row.raw_json),
-            fromCache: true,
+            ...payload,
             rate_limited: true,
-            cacheAge: cachedOrders[0]?.fetched_at,
           });
         }
       } catch (_) { /* fallthrough */ }
