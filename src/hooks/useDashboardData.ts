@@ -85,7 +85,7 @@ export const useDashboardData = () => {
       productCategory: [],
       timeRange: { start: 0, end: 24 },
       customerId: null,
-      period: 'today',
+      period: 'last30',
       granularity: 'daily',
     };
   });
