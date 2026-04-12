@@ -56,11 +56,12 @@ const formatDateToBrazilian = (date: Date): string => {
   return `${day}/${month}/${year}`;
 };
 
-const getTodayDateRange = () => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
+const getDefaultDateRange = () => {
   const end = new Date();
   end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  start.setDate(start.getDate() - 30);
+  start.setHours(0, 0, 0, 0);
   return { start, end };
 };
 
