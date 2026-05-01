@@ -65,9 +65,16 @@ const getDefaultDateRange = () => {
   return { start, end };
 };
 
+interface ProductCacheEntry {
+  sku: string;
+  nome: string | null;
+  categoria: string | null;
+}
+
 export const useDashboardData = () => {
   const [cachedOrders, setCachedOrders] = useState<CachedOrder[]>([]);
   const [cachedDetails, setCachedDetails] = useState<Map<number, CachedDetail>>(new Map());
+  const [productCache, setProductCache] = useState<Map<string, ProductCacheEntry>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
