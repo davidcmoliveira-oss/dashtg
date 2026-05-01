@@ -32,9 +32,117 @@ serve(async (req) => {
     if (!token) throw new Error('TINY_API_TOKEN não configurado');
     const db = getSupabaseAdmin();
     const body = await req.json().catch(() => ({}));
-    const limit = Math.min(body.limit || 200, 500);
+    const mode = body.mode || 'missing'; // 'missing' | 'all'
+    const limit = Math.min(body.limit || 200, 1000);
 
-    // 1. Coletar SKUs únicos dos itens já cacheados
+    // ============ MODE: 'all' — paginate the full Tiny catalog ============
+    if (mode === 'all') {
+      let pagina = 1;
+      let totalPaginas = 1;
+      let fetchedTotal = 0;
+      let rateLimited = false;
+      const maxPages = body.maxPages || 25;
+      const startPage = body.startPage || 1;
+      pagina = startPage;
+
+      do {
+        try {
+          await delay(400);
+          const res = await tinyPost('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
+            token, formato: 'JSON', pagina: String(pagina),
+          });
+          if (res.retorno?.status === 'Erro') {
+            const erros = res.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
+            if (isRateLimitError(erros)) { rateLimited = true; break; }
+            console.error('Catalog page error:', erros);
+            break;
+          }
+          totalPaginas = parseInt(res.retorno?.numero_paginas) || 1;
+          const produtos = res.retorno?.produtos || [];
+
+          // Cada item da pesquisa traz dados básicos, sem categoria.
+          // Para enriquecer com categoria, fazemos produto.obter (mas só se ainda não tiver).
+          const basicRows = produtos.map((wrap: any) => {
+            const p = wrap.produto || wrap;
+            return {
+              sku: String(p.codigo || '').trim(),
+              tiny_product_id: p.id ? parseInt(p.id) : null,
+              nome: p.nome || null,
+              categoria: null as string | null,
+              marca: p.marca || null,
+              unidade: p.unidade || null,
+              preco: parseFloat(p.preco) || 0,
+              raw_json: { search: p },
+              fetched_at: new Date().toISOString(),
+            };
+          }).filter((r: any) => r.sku);
+
+          // Salva já o básico
+          if (basicRows.length > 0) {
+            const { error } = await db.from('tiny_products_cache').upsert(basicRows, { onConflict: 'sku' });
+            if (error) console.error('Upsert basic error:', error.message);
+            fetchedTotal += basicRows.length;
+          }
+
+          console.log(`Page ${pagina}/${totalPaginas}: ${basicRows.length} products (basic)`);
+          pagina++;
+          if (pagina >= startPage + maxPages) { console.log('maxPages reached'); break; }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (isRateLimitError(msg)) { rateLimited = true; break; }
+          console.error(`Catalog page ${pagina} error:`, msg);
+          break;
+        }
+      } while (pagina <= totalPaginas);
+
+      // Agora enriquece com categoria via produto.obter (só os que estão sem categoria)
+      const { data: needCat } = await db
+        .from('tiny_products_cache')
+        .select('sku, tiny_product_id')
+        .is('categoria', null)
+        .not('tiny_product_id', 'is', null)
+        .limit(limit);
+
+      let enriched = 0;
+      for (const row of (needCat || [])) {
+        if (rateLimited) break;
+        try {
+          await delay(400);
+          const det = await tinyPost('https://api.tiny.com.br/api2/produto.obter.php', {
+            token, formato: 'JSON', id: String((row as any).tiny_product_id),
+          });
+          if (det.retorno?.status === 'Erro') {
+            const erros = det.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
+            if (isRateLimitError(erros)) { rateLimited = true; break; }
+            continue;
+          }
+          const p = det.retorno?.produto;
+          if (p && p.categoria) {
+            await db.from('tiny_products_cache')
+              .update({ categoria: p.categoria, marca: p.marca || null, raw_json: p, fetched_at: new Date().toISOString() })
+              .eq('sku', (row as any).sku);
+            enriched++;
+          } else if (p) {
+            // marca como buscado para não retornar (categoria vazia mesmo)
+            await db.from('tiny_products_cache')
+              .update({ categoria: 'Sem categoria', raw_json: p, fetched_at: new Date().toISOString() })
+              .eq('sku', (row as any).sku);
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (isRateLimitError(msg)) { rateLimited = true; break; }
+        }
+      }
+
+      return new Response(JSON.stringify({
+        success: true, mode: 'all',
+        catalog_pages_fetched: pagina - 1, total_pages: totalPaginas,
+        products_cached: fetchedTotal, categories_enriched: enriched,
+        rate_limited: rateLimited,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ============ MODE: 'missing' (default) — old per-SKU lookup ============
     const skuSet = new Set<string>();
     let from = 0;
     const PAGE = 1000;

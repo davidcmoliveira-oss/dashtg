@@ -92,9 +92,9 @@ export const CustomersListView = ({ customers, orders, isLoading, onCustomerClic
   const topPaymentMethod = useMemo(() => {
     const map = new Map<string, number>();
     customers.forEach(c => {
-      if (c.top_payment_method) {
-        map.set(c.top_payment_method, (map.get(c.top_payment_method) || 0) + 1);
-      }
+      const m = (c.top_payment_method || '').trim();
+      if (!m || m.toLowerCase() === 'não informado' || m.toLowerCase() === 'nao informado') return;
+      map.set(m, (map.get(m) || 0) + 1);
     });
     let best = '-';
     let max = 0;

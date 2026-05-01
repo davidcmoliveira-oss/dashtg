@@ -32,6 +32,38 @@ const formatDate = (d: Date) => {
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+const buildDetailRow = (orderId: number, pedido: any) => {
+  const items = (pedido.itens || []).map((item: any) => {
+    const i = item.item || item;
+    return {
+      sku: i.codigo || '',
+      product_name: i.descricao || i.codigo || '',
+      categoria: i.categoria || i.tipo_categoria || '',
+      qty: parseFloat(i.quantidade) || 1,
+      unit_price: parseFloat(i.valor_unitario) || 0,
+      total: parseFloat(i.valor_unitario) * (parseFloat(i.quantidade) || 1),
+    };
+  });
+  return {
+    tiny_order_id: orderId,
+    hora: pedido.hora || null,
+    forma_pagamento: pedido.forma_pagamento || 'Não informado',
+    items,
+    frete: parseFloat(pedido.valor_frete) || 0,
+    desconto: parseFloat(pedido.valor_desconto) || 0,
+    total_produtos: parseFloat(pedido.total_produtos) || 0,
+    numero_ecommerce: pedido.numero_ecommerce || null,
+    obs: pedido.obs || null,
+    endereco_entrega: pedido.endereco_entrega ? {
+      cidade: pedido.endereco_entrega.cidade || '',
+      uf: pedido.endereco_entrega.uf || '',
+      cep: pedido.endereco_entrega.cep || '',
+    } : null,
+    raw_json: pedido,
+    fetched_at: new Date().toISOString(),
+  };
+};
+
 // Fetch order details with concurrency control and rate limit handling
 const fetchOrderDetails = async (token: string, ids: number[], concurrency = 3) => {
   const results: Record<number, any> = {};
@@ -78,8 +110,55 @@ serve(async (req) => {
     if (!tinyApiToken) throw new Error('TINY_API_TOKEN não configurado');
 
     const body = await req.json().catch(() => ({}));
-    const mode = body.mode || 'incremental'; // 'full' | 'incremental'
+    const mode = body.mode || 'incremental'; // 'full' | 'incremental' | 'backfill'
     const db = getSupabaseAdmin();
+
+    // ============ MODE: 'backfill' — only fetch missing details for cached orders ============
+    if (mode === 'backfill') {
+      const limit = Math.min(body.limit || 200, 500);
+      // Pega ids de pedidos que ainda não têm detalhes
+      const PAGE = 1000;
+      const allCachedIds: number[] = [];
+      let pageIdx = 0;
+      while (true) {
+        const { data, error } = await db
+          .from('tiny_orders_cache')
+          .select('tiny_order_id')
+          .order('tiny_order_id', { ascending: false })
+          .range(pageIdx * PAGE, pageIdx * PAGE + PAGE - 1);
+        if (error) throw new Error(error.message);
+        if (!data || data.length === 0) break;
+        data.forEach((r: any) => allCachedIds.push(r.tiny_order_id));
+        if (data.length < PAGE) break;
+        pageIdx++;
+      }
+      const { data: existingDet } = await db.from('tiny_order_details_cache').select('tiny_order_id');
+      const haveSet = new Set((existingDet || []).map((r: any) => r.tiny_order_id));
+      const idsToFetch = allCachedIds.filter(id => !haveSet.has(id)).slice(0, limit);
+      console.log(`Backfill: ${allCachedIds.length} orders, ${haveSet.size} have details, fetching ${idsToFetch.length}`);
+
+      let rateLimited = false;
+      let fetched = 0;
+      for (let i = 0; i < idsToFetch.length; i += 20) {
+        if (rateLimited) break;
+        const batch = idsToFetch.slice(i, i + 20);
+        const { results, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
+        const detailRows = Object.entries(results).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
+        if (detailRows.length > 0) {
+          const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
+          if (error) console.error('Backfill upsert error:', error.message);
+          fetched += detailRows.length;
+        }
+        if (rl) { rateLimited = true; break; }
+        await delay(500);
+      }
+
+      return new Response(JSON.stringify({
+        success: true, mode: 'backfill',
+        total_orders: allCachedIds.length, missing_details: idsToFetch.length,
+        fetched, rate_limited: rateLimited,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     // Determine date range
     let dataInicial: string;
@@ -200,38 +279,7 @@ serve(async (req) => {
         const { results: details, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
 
         // Upsert fetched details
-        const detailRows = Object.entries(details).map(([orderId, pedido]) => {
-          const items = (pedido.itens || []).map((item: any) => {
-            const i = item.item || item;
-            return {
-              sku: i.codigo || '',
-              product_name: i.descricao || i.codigo || '',
-              categoria: i.categoria || i.tipo_categoria || '',
-              qty: parseFloat(i.quantidade) || 1,
-              unit_price: parseFloat(i.valor_unitario) || 0,
-              total: parseFloat(i.valor_unitario) * (parseFloat(i.quantidade) || 1),
-            };
-          });
-
-          return {
-            tiny_order_id: parseInt(orderId),
-            hora: pedido.hora || null,
-            forma_pagamento: pedido.forma_pagamento || 'Não informado',
-            items,
-            frete: parseFloat(pedido.valor_frete) || 0,
-            desconto: parseFloat(pedido.valor_desconto) || 0,
-            total_produtos: parseFloat(pedido.total_produtos) || 0,
-            numero_ecommerce: pedido.numero_ecommerce || null,
-            obs: pedido.obs || null,
-            endereco_entrega: pedido.endereco_entrega ? {
-              cidade: pedido.endereco_entrega.cidade || '',
-              uf: pedido.endereco_entrega.uf || '',
-              cep: pedido.endereco_entrega.cep || '',
-            } : null,
-            raw_json: pedido,
-            fetched_at: new Date().toISOString(),
-          };
-        });
+        const detailRows = Object.entries(details).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
 
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
