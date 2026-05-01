@@ -141,6 +141,9 @@ serve(async (req) => {
     }
 
     // ============ MODE: 'missing' (default) — old per-SKU lookup ============
+    const skuSet = new Set<string>();
+    let from = 0;
+    const PAGE = 1000;
     while (true) {
       const { data, error } = await db
         .from('tiny_order_details_cache')
