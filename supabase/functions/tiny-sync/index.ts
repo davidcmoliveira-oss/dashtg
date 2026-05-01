@@ -205,7 +205,8 @@ serve(async (req) => {
             const i = item.item || item;
             return {
               sku: i.codigo || '',
-              product_name: i.descricao || 'Sem nome',
+              product_name: i.descricao || i.codigo || '',
+              categoria: i.categoria || i.tipo_categoria || '',
               qty: parseFloat(i.quantidade) || 1,
               unit_price: parseFloat(i.valor_unitario) || 0,
               total: parseFloat(i.valor_unitario) * (parseFloat(i.quantidade) || 1),
