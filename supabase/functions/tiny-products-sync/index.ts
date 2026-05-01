@@ -86,7 +86,7 @@ serve(async (req) => {
 
           console.log(`Page ${pagina}/${totalPaginas}: ${basicRows.length} products (basic)`);
           pagina++;
-          if (pagina > maxPages) { console.log('maxPages reached'); break; }
+          if (pagina >= startPage + maxPages) { console.log('maxPages reached'); break; }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           if (isRateLimitError(msg)) { rateLimited = true; break; }
