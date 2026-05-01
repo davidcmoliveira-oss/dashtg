@@ -64,6 +64,14 @@ const Index = () => {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
+    // Dispara sync de produtos em paralelo (não bloqueia) — popula nome/categoria
+    supabase.functions.invoke('tiny-products-sync', { body: { limit: 80 } })
+      .then(({ data }) => {
+        if (data?.fetched > 0) {
+          toast.success(`${data.fetched} produtos atualizados`);
+        }
+      })
+      .catch(() => { /* silencioso */ });
     await triggerSync('incremental');
     setLastUpdate(new Date());
     setIsRefreshing(false);
