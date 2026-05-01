@@ -279,38 +279,7 @@ serve(async (req) => {
         const { results: details, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
 
         // Upsert fetched details
-        const detailRows = Object.entries(details).map(([orderId, pedido]) => {
-          const items = (pedido.itens || []).map((item: any) => {
-            const i = item.item || item;
-            return {
-              sku: i.codigo || '',
-              product_name: i.descricao || i.codigo || '',
-              categoria: i.categoria || i.tipo_categoria || '',
-              qty: parseFloat(i.quantidade) || 1,
-              unit_price: parseFloat(i.valor_unitario) || 0,
-              total: parseFloat(i.valor_unitario) * (parseFloat(i.quantidade) || 1),
-            };
-          });
-
-          return {
-            tiny_order_id: parseInt(orderId),
-            hora: pedido.hora || null,
-            forma_pagamento: pedido.forma_pagamento || 'Não informado',
-            items,
-            frete: parseFloat(pedido.valor_frete) || 0,
-            desconto: parseFloat(pedido.valor_desconto) || 0,
-            total_produtos: parseFloat(pedido.total_produtos) || 0,
-            numero_ecommerce: pedido.numero_ecommerce || null,
-            obs: pedido.obs || null,
-            endereco_entrega: pedido.endereco_entrega ? {
-              cidade: pedido.endereco_entrega.cidade || '',
-              uf: pedido.endereco_entrega.uf || '',
-              cep: pedido.endereco_entrega.cep || '',
-            } : null,
-            raw_json: pedido,
-            fetched_at: new Date().toISOString(),
-          };
-        });
+        const detailRows = Object.entries(details).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
 
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
