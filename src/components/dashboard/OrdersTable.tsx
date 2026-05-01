@@ -335,20 +335,47 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                 </div>
               </div>
 
-              {/* SKU List */}
-              {selectedOrder.sku_list.length > 0 && (
-                <div className="border-t border-border pt-4">
-                  <h4 className="font-medium mb-3">Itens do Pedido</h4>
-                  <div className="space-y-2">
-                    {selectedOrder.sku_list.map((sku, idx) => (
-                      <div key={idx} className="flex justify-between py-2 border-b border-border last:border-0">
-                        <span className="font-mono text-sm">{sku}</span>
-                        <span className="text-muted-foreground">1x</span>
+              {/* Itens do Pedido */}
+              {(() => {
+                const items = ((selectedOrder as any)._items || []) as Array<{ sku: string; product_name: string; qty: number; total: number; unit_price: number }>;
+                if (items.length === 0 && selectedOrder.sku_list.length === 0) return null;
+                if (items.length > 0) {
+                  return (
+                    <div className="border-t border-border pt-4">
+                      <h4 className="font-medium mb-3">Itens do Pedido</h4>
+                      <div className="space-y-2">
+                        {items.map((it, idx) => (
+                          <div key={idx} className="flex justify-between gap-4 py-2 border-b border-border last:border-0">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{it.product_name || it.sku}</p>
+                              {it.sku && it.product_name && (
+                                <p className="text-xs text-muted-foreground font-mono">SKU: {it.sku}</p>
+                              )}
+                            </div>
+                            <div className="text-right text-sm whitespace-nowrap">
+                              <p>{it.qty}× {formatCurrency(it.unit_price)}</p>
+                              <p className="text-muted-foreground">{formatCurrency(it.total)}</p>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  );
+                }
+                return (
+                  <div className="border-t border-border pt-4">
+                    <h4 className="font-medium mb-3">Itens do Pedido</h4>
+                    <div className="space-y-2">
+                      {selectedOrder.sku_list.map((sku, idx) => (
+                        <div key={idx} className="flex justify-between py-2 border-b border-border last:border-0">
+                          <span className="font-mono text-sm">{sku}</span>
+                          <span className="text-muted-foreground">1x</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div className="border-t border-border pt-4">
                 <h4 className="font-medium mb-3">Valores</h4>
