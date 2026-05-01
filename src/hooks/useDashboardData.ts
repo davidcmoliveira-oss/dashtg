@@ -161,6 +161,27 @@ export const useDashboardData = () => {
         setCachedDetails(detailsMap);
         addLog(`Carregados ${detailsMap.size} detalhes do cache`);
       }
+
+      // Load product cache (sku -> nome, categoria) for enrichment
+      const productMap = new Map<string, ProductCacheEntry>();
+      let pPage = 0;
+      while (true) {
+        const pFrom = pPage * PAGE_SIZE;
+        const pTo = pFrom + PAGE_SIZE - 1;
+        const { data: pChunk, error: pErr } = await supabase
+          .from('tiny_products_cache')
+          .select('sku, nome, categoria')
+          .range(pFrom, pTo);
+        if (pErr) { console.error('Products cache error:', pErr.message); break; }
+        if (!pChunk || pChunk.length === 0) break;
+        pChunk.forEach((p: any) => {
+          if (p.sku) productMap.set(String(p.sku).trim(), p as ProductCacheEntry);
+        });
+        if (pChunk.length < PAGE_SIZE) break;
+        pPage++;
+      }
+      setProductCache(productMap);
+      addLog(`Carregados ${productMap.size} produtos do cache`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar cache';
       setError(message);
