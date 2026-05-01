@@ -41,7 +41,9 @@ serve(async (req) => {
       let totalPaginas = 1;
       let fetchedTotal = 0;
       let rateLimited = false;
-      const maxPages = body.maxPages || 50;
+      const maxPages = body.maxPages || 25;
+      const startPage = body.startPage || 1;
+      pagina = startPage;
 
       do {
         try {
