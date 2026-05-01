@@ -66,7 +66,7 @@ const Index = () => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     // Em paralelo (não bloqueia): catálogo completo de produtos + backfill de detalhes faltantes
-    const productsAllPromise = supabase.functions.invoke('tiny-products-sync', { body: { mode: 'all', limit: 200 } })
+    const productsAllPromise = supabase.functions.invoke('tiny-products-sync', { body: { mode: 'all', maxPages: 25, limit: 100 } })
       .then(({ data }) => {
         if (data?.products_cached > 0 || data?.categories_enriched > 0) {
           toast.success(`Catálogo: ${data.products_cached || 0} produtos, ${data.categories_enriched || 0} categorias`);
