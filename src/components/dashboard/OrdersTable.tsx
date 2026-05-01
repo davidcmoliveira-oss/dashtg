@@ -306,7 +306,11 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
           <DialogHeader>
             <DialogTitle>Pedido {selectedOrder?.order_id}</DialogTitle>
           </DialogHeader>
-          {selectedOrder && (
+          {selectedOrder && (() => {
+            const items = (((selectedOrder as any)._items || []) as Array<{ sku: string; product_name: string; qty: number; total: number; unit_price: number }>);
+            const realItemsCount = items.length > 0 ? items.length : selectedOrder.items_count;
+            const totalUnits = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+            return (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <div>
@@ -322,8 +326,8 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                   <p className="font-medium">{selectedOrder.customer_name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Itens</p>
-                  <p className="font-medium">{selectedOrder.items_count}</p>
+                  <p className="text-sm text-muted-foreground">Itens (produtos)</p>
+                  <p className="font-medium">{realItemsCount}{totalUnits > 0 ? ` • ${totalUnits.toLocaleString('pt-BR')} un` : ''}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Canal</p>
@@ -336,46 +340,43 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
               </div>
 
               {/* Itens do Pedido */}
-              {(() => {
-                const items = ((selectedOrder as any)._items || []) as Array<{ sku: string; product_name: string; qty: number; total: number; unit_price: number }>;
-                if (items.length === 0 && selectedOrder.sku_list.length === 0) return null;
-                if (items.length > 0) {
-                  return (
-                    <div className="border-t border-border pt-4">
-                      <h4 className="font-medium mb-3">Itens do Pedido</h4>
-                      <div className="space-y-2">
-                        {items.map((it, idx) => (
-                          <div key={idx} className="flex justify-between gap-4 py-2 border-b border-border last:border-0">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">{it.product_name || it.sku}</p>
-                              {it.sku && it.product_name && (
-                                <p className="text-xs text-muted-foreground font-mono">SKU: {it.sku}</p>
-                              )}
-                            </div>
-                            <div className="text-right text-sm whitespace-nowrap">
-                              <p>{it.qty}× {formatCurrency(it.unit_price)}</p>
-                              <p className="text-muted-foreground">{formatCurrency(it.total)}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div className="border-t border-border pt-4">
-                    <h4 className="font-medium mb-3">Itens do Pedido</h4>
-                    <div className="space-y-2">
-                      {selectedOrder.sku_list.map((sku, idx) => (
-                        <div key={idx} className="flex justify-between py-2 border-b border-border last:border-0">
-                          <span className="font-mono text-sm">{sku}</span>
-                          <span className="text-muted-foreground">1x</span>
+              {items.length > 0 ? (
+                <div className="border-t border-border pt-4">
+                  <h4 className="font-medium mb-3">Itens do Pedido ({items.length})</h4>
+                  <div className="space-y-2">
+                    {items.map((it, idx) => (
+                      <div key={idx} className="flex justify-between gap-4 py-2 border-b border-border last:border-0">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{it.product_name || it.sku || 'Produto sem nome'}</p>
+                          {it.sku && (
+                            <p className="text-xs text-muted-foreground font-mono">SKU: {it.sku}</p>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-right text-sm whitespace-nowrap">
+                          <p>{Number(it.qty).toLocaleString('pt-BR')}× {formatCurrency(it.unit_price)}</p>
+                          <p className="text-muted-foreground">{formatCurrency(it.total)}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                );
-              })()}
+                </div>
+              ) : selectedOrder.sku_list.length > 0 ? (
+                <div className="border-t border-border pt-4">
+                  <h4 className="font-medium mb-3">Itens do Pedido</h4>
+                  <p className="text-sm text-muted-foreground mb-2">Detalhes em sincronização. Sincronize novamente para carregar nomes dos produtos.</p>
+                  <div className="space-y-2">
+                    {selectedOrder.sku_list.map((sku, idx) => (
+                      <div key={idx} className="flex justify-between py-2 border-b border-border last:border-0">
+                        <span className="font-mono text-sm">{sku}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t border-border pt-4">
+                  <p className="text-sm text-muted-foreground">Detalhes do pedido ainda não sincronizados. Clique em "Sincronizar agora" para buscar.</p>
+                </div>
+              )}
 
               <div className="border-t border-border pt-4">
                 <h4 className="font-medium mb-3">Valores</h4>
