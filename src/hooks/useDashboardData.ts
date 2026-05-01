@@ -473,12 +473,15 @@ export const useDashboardData = () => {
       const yearsSinceFirst = Math.max(1, (new Date().getTime() - firstOrderDate.getTime()) / (365 * 24 * 60 * 60 * 1000));
       const ordersPerYear = totalOrders / yearsSinceFirst;
 
+      // Top payment method — ignora valores vazios/desconhecidos
       let topPaymentMethod = 'Não informado';
       let maxCount = 0;
       data.paymentMethods.forEach((count, method) => {
+        const m = (method || '').trim();
+        if (!m || m.toLowerCase() === 'não informado' || m.toLowerCase() === 'nao informado') return;
         if (count > maxCount) {
           maxCount = count;
-          topPaymentMethod = method;
+          topPaymentMethod = m;
         }
       });
 
