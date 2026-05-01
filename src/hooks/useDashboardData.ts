@@ -395,6 +395,7 @@ export const useDashboardData = () => {
       const data = customerMap.get(order.customer_id)!;
       items.forEach((item: any) => {
         const key = item.sku || item.product_name;
+        if (!key) return;
         const existing = data.productMap.get(key);
         if (existing) {
           existing.qty_total += item.qty;
@@ -403,7 +404,7 @@ export const useDashboardData = () => {
         } else {
           data.productMap.set(key, {
             sku: item.sku || '',
-            product_name: item.product_name || 'Sem nome',
+            product_name: item.product_name || item.sku || 'Produto sem identificação',
             qty_total: item.qty,
             spend_total: item.total,
             last_purchase_date: order.order_date,
