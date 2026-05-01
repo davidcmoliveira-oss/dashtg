@@ -32,6 +32,38 @@ const formatDate = (d: Date) => {
 
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+const buildDetailRow = (orderId: number, pedido: any) => {
+  const items = (pedido.itens || []).map((item: any) => {
+    const i = item.item || item;
+    return {
+      sku: i.codigo || '',
+      product_name: i.descricao || i.codigo || '',
+      categoria: i.categoria || i.tipo_categoria || '',
+      qty: parseFloat(i.quantidade) || 1,
+      unit_price: parseFloat(i.valor_unitario) || 0,
+      total: parseFloat(i.valor_unitario) * (parseFloat(i.quantidade) || 1),
+    };
+  });
+  return {
+    tiny_order_id: orderId,
+    hora: pedido.hora || null,
+    forma_pagamento: pedido.forma_pagamento || 'Não informado',
+    items,
+    frete: parseFloat(pedido.valor_frete) || 0,
+    desconto: parseFloat(pedido.valor_desconto) || 0,
+    total_produtos: parseFloat(pedido.total_produtos) || 0,
+    numero_ecommerce: pedido.numero_ecommerce || null,
+    obs: pedido.obs || null,
+    endereco_entrega: pedido.endereco_entrega ? {
+      cidade: pedido.endereco_entrega.cidade || '',
+      uf: pedido.endereco_entrega.uf || '',
+      cep: pedido.endereco_entrega.cep || '',
+    } : null,
+    raw_json: pedido,
+    fetched_at: new Date().toISOString(),
+  };
+};
+
 // Fetch order details with concurrency control and rate limit handling
 const fetchOrderDetails = async (token: string, ids: number[], concurrency = 3) => {
   const results: Record<number, any> = {};
