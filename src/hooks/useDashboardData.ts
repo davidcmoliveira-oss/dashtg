@@ -200,20 +200,10 @@ export const useDashboardData = () => {
     return [];
   }, [triggerSync, loadFromCache]);
 
-  // Initial load from cache + set up 5-minute auto-sync
+  // Initial load from cache (manual sync only via button)
   useEffect(() => {
     loadFromCache();
-
-    // Auto-sync every 5 minutes
-    syncIntervalRef.current = setInterval(() => {
-      addLog('Auto-sync (5 min)...');
-      triggerSync('incremental');
-    }, 5 * 60 * 1000);
-
-    return () => {
-      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
-    };
-  }, [loadFromCache, triggerSync]);
+  }, [loadFromCache]);
 
   // Transform cached data to TinyOrder format
   const orders: TinyOrder[] = useMemo(() => {
@@ -221,8 +211,8 @@ export const useDashboardData = () => {
       const detail = cachedDetails.get(cached.tiny_order_id);
       const orderDate = cached.data_pedido || '';
 
-      let productName = 'Sem nome';
-      let productCategory = 'Sem categoria';
+      let productName = '';
+      let productCategory = '';
       let itemsCount = 1;
       let skuList: string[] = [];
       let discount = 0;
@@ -241,7 +231,9 @@ export const useDashboardData = () => {
 
         const items = detail.items || [];
         if (items.length > 0) {
-          productName = items[0].product_name || 'Sem nome';
+          const firstItem = items[0];
+          productName = firstItem.product_name || firstItem.descricao || firstItem.sku || '';
+          productCategory = firstItem.categoria || firstItem.category || '';
           skuList = items.map((i: any) => i.sku).filter(Boolean);
           itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
         }
@@ -251,6 +243,14 @@ export const useDashboardData = () => {
           shippingState = detail.endereco_entrega.uf || '';
           cep = detail.endereco_entrega.cep || '';
         }
+      }
+
+      // Fallbacks: never use placeholder "Sem nome" — use order number identifier
+      if (!productName) {
+        productName = `Pedido #${cached.numero || cached.tiny_order_id}`;
+      }
+      if (!productCategory) {
+        productCategory = 'Sem categoria';
       }
 
       const valor = Number(cached.valor) || 0;
@@ -395,6 +395,7 @@ export const useDashboardData = () => {
       const data = customerMap.get(order.customer_id)!;
       items.forEach((item: any) => {
         const key = item.sku || item.product_name;
+        if (!key) return;
         const existing = data.productMap.get(key);
         if (existing) {
           existing.qty_total += item.qty;
@@ -403,7 +404,7 @@ export const useDashboardData = () => {
         } else {
           data.productMap.set(key, {
             sku: item.sku || '',
-            product_name: item.product_name || 'Sem nome',
+            product_name: item.product_name || item.sku || 'Produto sem identificação',
             qty_total: item.qty,
             spend_total: item.total,
             last_purchase_date: order.order_date,
@@ -468,15 +469,14 @@ export const useDashboardData = () => {
       const items = (order as any)._items || [];
       const orderDate = parseBrazilianDate(order.order_date);
 
-      if (items.length === 0) {
-        const productKey = order.product_name || `Produto ${order.order_id}`;
-        updateProductMap(productMap, productKey, productKey, order.items_count, order.total_paid, order.customer_id, orderDate, order.order_date);
-      } else {
-        items.forEach((item: any) => {
-          const productKey = item.product_name || item.sku || 'Sem nome';
-          updateProductMap(productMap, productKey, productKey, item.qty, item.total, order.customer_id, orderDate, order.order_date);
-        });
-      }
+      // Only aggregate products from orders that have detailed items
+      if (items.length === 0) return;
+
+      items.forEach((item: any) => {
+        const productKey = item.product_name || item.sku;
+        if (!productKey) return;
+        updateProductMap(productMap, productKey, productKey, item.qty, item.total, order.customer_id, orderDate, order.order_date);
+      });
     });
 
     const productsList = Array.from(productMap.entries())

@@ -1,0 +1,1 @@
+SELECT cron.unschedule('tiny-sync-every-5min');
