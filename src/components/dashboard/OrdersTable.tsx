@@ -72,7 +72,6 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
     .filter(order =>
       order.order_id.toLowerCase().includes(search.toLowerCase()) ||
       order.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      order.shipping_city.toLowerCase().includes(search.toLowerCase()) ||
       order.payment_method.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a, b) => {
@@ -104,7 +103,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   );
 
   const exportCSV = () => {
-    const headers = ['ID', 'Data', 'Cliente', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Cidade', 'Estado', 'CEP', 'Pagamento', 'Canal', 'Status Entrega'];
+    const headers = ['ID', 'Data', 'Cliente', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Pagamento', 'Canal', 'Status Entrega'];
     const rows = filteredOrders.map(o => [
       o.order_id,
       o.order_date,
@@ -116,9 +115,6 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
       o.tax,
       o.freight_cost,
       o.status,
-      o.shipping_city,
-      o.shipping_state,
-      o.cep,
       o.payment_method,
       o.sales_channel,
       o.delivery_status,
@@ -167,7 +163,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar pedido, cliente, cidade..."
+            placeholder="Buscar pedido, cliente, pagamento..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -225,14 +221,13 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
               </TableHead>
               <TableHead>Pagamento</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Cidade</TableHead>
               <TableHead>Entrega</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   Nenhum pedido encontrado
                 </TableCell>
               </TableRow>
@@ -261,7 +256,6 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                   <TableCell className="text-right">{formatCurrency(order.net_revenue)}</TableCell>
                   <TableCell>{order.payment_method}</TableCell>
                   <TableCell>{getStatusBadge(order.status)}</TableCell>
-                  <TableCell>{order.shipping_city}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{order.delivery_status}</Badge>
                   </TableCell>
@@ -413,22 +407,6 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
               <div className="border-t border-border pt-4">
                 <h4 className="font-medium mb-3">Entrega</h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cidade</span>
-                    <span>{selectedOrder.shipping_city}</span>
-                  </div>
-                  {selectedOrder.shipping_state && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estado</span>
-                      <span>{selectedOrder.shipping_state}</span>
-                    </div>
-                  )}
-                  {selectedOrder.cep && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">CEP</span>
-                      <span>{selectedOrder.cep}</span>
-                    </div>
-                  )}
                   {selectedOrder.delivery_status && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Status</span>

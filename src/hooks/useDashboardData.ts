@@ -280,7 +280,8 @@ export const useDashboardData = () => {
           productName = firstItem.product_name || '';
           productCategory = itemWithCat.categoria || '';
           skuList = items.map((i: any) => i.sku).filter(Boolean);
-          itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
+          // items_count = produtos distintos no pedido (cada linha conta 1, ignorando peso/qty fracionária)
+          itemsCount = items.length;
           // overwrite detail.items para uso no _items abaixo
           (detail as any)._enrichedItems = items;
         }
@@ -416,6 +417,15 @@ export const useDashboardData = () => {
 
   // Aggregate customers
   const customers: CustomerData[] = useMemo(() => {
+    // Para "cliente ativo" usar a ÚLTIMA compra real do cliente (dataset completo, sem filtro de data)
+    const lastOrderDateByCustomer = new Map<string, string>();
+    orders.forEach(o => {
+      const cur = lastOrderDateByCustomer.get(o.customer_id);
+      if (!cur || parseBrazilianDate(o.order_date) > parseBrazilianDate(cur)) {
+        lastOrderDateByCustomer.set(o.customer_id, o.order_date);
+      }
+    });
+
     const customerMap = new Map<string, {
       orders: TinyOrder[];
       productMap: Map<string, ProductPurchase>;
@@ -489,6 +499,10 @@ export const useDashboardData = () => {
       const productsList = Array.from(data.productMap.values())
         .sort((a, b) => b.spend_total - a.spend_total);
 
+      // Última compra REAL (não restrita ao período filtrado) — base para "cliente ativo"
+      const realLastOrderDate = lastOrderDateByCustomer.get(customerId) || lastOrder.order_date;
+      const realDaysSinceLast = calculateDaysSinceLastPurchase(realLastOrderDate);
+
       return {
         customer_id: customerId,
         customer_name: lastOrder.customer_name,
@@ -498,17 +512,17 @@ export const useDashboardData = () => {
         items_count: itemsCount,
         avg_items_per_order: totalOrders > 0 ? itemsCount / totalOrders : 0,
         first_order_date: firstOrder.order_date,
-        last_order_date: lastOrder.order_date,
-        days_since_last_purchase: calculateDaysSinceLastPurchase(lastOrder.order_date),
+        last_order_date: realLastOrderDate,
+        days_since_last_purchase: realDaysSinceLast,
         avg_days_between_purchases: calculateAvgDaysBetweenPurchases(data.orders),
-        is_active: isActiveCustomer(lastOrder.order_date),
+        is_active: realDaysSinceLast <= 60,
         cltv_3y: calculateCLTV3Y(totalSpend / totalOrders, ordersPerYear),
         orders: sortedOrders,
         products: productsList,
         top_payment_method: topPaymentMethod,
       };
     }).sort((a, b) => b.total_spend - a.total_spend);
-  }, [filteredOrders]);
+  }, [filteredOrders, orders]);
 
   // Products data
   const products: ProductData[] = useMemo(() => {

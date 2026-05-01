@@ -39,14 +39,19 @@ interface CustomersListViewProps {
 export const CustomersListView = ({ customers, orders, isLoading, onCustomerClick }: CustomersListViewProps) => {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<'value' | 'orders' | 'items'>('value');
   const itemsPerPage = 20;
 
   const formatCurrency = (value: number) =>
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
-  const filteredCustomers = customers.filter(c =>
-    c.customer_name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCustomers = customers
+    .filter(c => c.customer_name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === 'orders') return b.total_orders - a.total_orders;
+      if (sortBy === 'items') return b.items_count - a.items_count;
+      return b.total_spend - a.total_spend;
+    });
 
   const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
   const paginatedCustomers = filteredCustomers.slice(
@@ -441,7 +446,14 @@ export const CustomersListView = ({ customers, orders, isLoading, onCustomerClic
 
       {/* Customers List */}
       <div className="rounded-xl border border-border bg-card p-6">
-        <h3 className="text-lg font-semibold mb-4">Ranking de Clientes por Valor</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 className="text-lg font-semibold">Ranking de Clientes</h3>
+          <div className="flex gap-1">
+            <Button variant={sortBy === 'value' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('value'); setCurrentPage(1); }}>Por valor</Button>
+            <Button variant={sortBy === 'orders' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('orders'); setCurrentPage(1); }}>Por pedidos</Button>
+            <Button variant={sortBy === 'items' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('items'); setCurrentPage(1); }}>Por itens</Button>
+          </div>
+        </div>
 
         <div className="space-y-3">
           {paginatedCustomers.length === 0 ? (

@@ -57,6 +57,7 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
   const [selectedProduct, setSelectedProduct] = useState<ProductData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [noSaleFilter, setNoSaleFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<'revenue' | 'qty' | 'orders'>('revenue');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
@@ -95,6 +96,10 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
       default:
         return true;
     }
+  }).sort((a, b) => {
+    if (sortBy === 'qty') return b.total_qty - a.total_qty;
+    if (sortBy === 'orders') return b.total_orders - a.total_orders;
+    return b.total_revenue - a.total_revenue;
   });
 
   // Pagination
@@ -219,6 +224,16 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
               }}
               className="w-full sm:w-64"
             />
+            <Select value={sortBy} onValueChange={(v: any) => { setSortBy(v); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="Ordenar por..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="revenue">Ordenar por valor</SelectItem>
+                <SelectItem value="qty">Ordenar por quantidade</SelectItem>
+                <SelectItem value="orders">Ordenar por pedidos</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={noSaleFilter} onValueChange={(v) => { setNoSaleFilter(v); setCurrentPage(1); }}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Sem venda há..." />
