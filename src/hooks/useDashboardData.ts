@@ -364,7 +364,7 @@ export const useDashboardData = () => {
     });
 
     return mapped;
-  }, [cachedOrders, cachedDetails]);
+  }, [cachedOrders, cachedDetails, productCache]);
 
   // Filter orders based on current filters
   const filteredOrders = useMemo(() => {
