@@ -257,13 +257,30 @@ export const useDashboardData = () => {
         discount = Number(detail.desconto) || 0;
         freightCost = Number(detail.frete) || 0;
 
-        const items = detail.items || [];
+        const rawItems = detail.items || [];
+        // Enriquecer cada item com nome+categoria do cache de produtos
+        const items = rawItems.map((it: any) => {
+          const skuKey = String(it.sku || '').trim();
+          const cached = skuKey ? productCache.get(skuKey) : undefined;
+          return {
+            sku: skuKey,
+            product_name: cached?.nome || it.product_name || it.descricao || skuKey || '',
+            categoria: cached?.categoria || it.categoria || it.category || '',
+            qty: Number(it.qty) || 1,
+            unit_price: Number(it.unit_price) || 0,
+            total: Number(it.total) || 0,
+          };
+        });
         if (items.length > 0) {
           const firstItem = items[0];
-          productName = firstItem.product_name || firstItem.descricao || firstItem.sku || '';
-          productCategory = firstItem.categoria || firstItem.category || '';
+          // Use o primeiro item com categoria preenchida
+          const itemWithCat = items.find((i: any) => i.categoria) || firstItem;
+          productName = firstItem.product_name || '';
+          productCategory = itemWithCat.categoria || '';
           skuList = items.map((i: any) => i.sku).filter(Boolean);
           itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
+          // overwrite detail.items para uso no _items abaixo
+          (detail as any)._enrichedItems = items;
         }
 
         if (detail.endereco_entrega) {
