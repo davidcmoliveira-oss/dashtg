@@ -407,22 +407,6 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
               <div className="border-t border-border pt-4">
                 <h4 className="font-medium mb-3">Entrega</h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Cidade</span>
-                    <span>{selectedOrder.shipping_city}</span>
-                  </div>
-                  {selectedOrder.shipping_state && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estado</span>
-                      <span>{selectedOrder.shipping_state}</span>
-                    </div>
-                  )}
-                  {selectedOrder.cep && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">CEP</span>
-                      <span>{selectedOrder.cep}</span>
-                    </div>
-                  )}
                   {selectedOrder.delivery_status && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Status</span>
