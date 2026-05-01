@@ -433,10 +433,17 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
 
       {/* Top 5 Products */}
       <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-        <h3 className="font-semibold mb-4 flex items-center gap-2">
-          <Package className="h-5 w-5 text-primary" />
-          Top 5 Produtos (por valor)
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 className="font-semibold flex items-center gap-2">
+            <Package className="h-5 w-5 text-primary" />
+            Top 5 Produtos
+          </h3>
+          <div className="flex gap-1">
+            <Button variant={topProductsSort === 'value' ? 'default' : 'ghost'} size="sm" onClick={() => setTopProductsSort('value')}>Valor</Button>
+            <Button variant={topProductsSort === 'qty' ? 'default' : 'ghost'} size="sm" onClick={() => setTopProductsSort('qty')}>Itens</Button>
+            <Button variant={topProductsSort === 'orders' ? 'default' : 'ghost'} size="sm" onClick={() => setTopProductsSort('orders')}>Pedidos</Button>
+          </div>
+        </div>
         <div className="grid gap-3 sm:grid-cols-5">
           {top5Products.length === 0 ? (
             <p className="text-sm text-muted-foreground col-span-5 text-center py-4">Nenhum produto encontrado</p>
@@ -448,7 +455,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
                   <span className="text-sm font-medium truncate">{product.name}</span>
                 </div>
                 <p className="text-lg font-bold">{formatCurrency(product.value)}</p>
-                <p className="text-xs text-muted-foreground">{product.qty} un</p>
+                <p className="text-xs text-muted-foreground">{product.qty} item{product.qty > 1 ? 's' : ''} • {product.orders} pedido{product.orders > 1 ? 's' : ''}</p>
               </div>
             ))
           )}
