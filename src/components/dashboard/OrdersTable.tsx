@@ -456,7 +456,8 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
