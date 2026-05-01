@@ -468,15 +468,14 @@ export const useDashboardData = () => {
       const items = (order as any)._items || [];
       const orderDate = parseBrazilianDate(order.order_date);
 
-      if (items.length === 0) {
-        const productKey = order.product_name || `Produto ${order.order_id}`;
-        updateProductMap(productMap, productKey, productKey, order.items_count, order.total_paid, order.customer_id, orderDate, order.order_date);
-      } else {
-        items.forEach((item: any) => {
-          const productKey = item.product_name || item.sku || 'Sem nome';
-          updateProductMap(productMap, productKey, productKey, item.qty, item.total, order.customer_id, orderDate, order.order_date);
-        });
-      }
+      // Only aggregate products from orders that have detailed items
+      if (items.length === 0) return;
+
+      items.forEach((item: any) => {
+        const productKey = item.product_name || item.sku;
+        if (!productKey) return;
+        updateProductMap(productMap, productKey, productKey, item.qty, item.total, order.customer_id, orderDate, order.order_date);
+      });
     });
 
     const productsList = Array.from(productMap.entries())
