@@ -65,15 +65,26 @@ const Index = () => {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Dispara sync de produtos em paralelo (não bloqueia) — popula nome/categoria
-    supabase.functions.invoke('tiny-products-sync', { body: { limit: 80 } })
+    // Em paralelo (não bloqueia): catálogo completo de produtos + backfill de detalhes faltantes
+    const productsAllPromise = supabase.functions.invoke('tiny-products-sync', { body: { mode: 'all', limit: 200 } })
       .then(({ data }) => {
-        if (data?.fetched > 0) {
-          toast.success(`${data.fetched} produtos atualizados`);
+        if (data?.products_cached > 0 || data?.categories_enriched > 0) {
+          toast.success(`Catálogo: ${data.products_cached || 0} produtos, ${data.categories_enriched || 0} categorias`);
         }
       })
       .catch(() => { /* silencioso */ });
+
+    const backfillPromise = supabase.functions.invoke('tiny-sync', { body: { mode: 'backfill', limit: 200 } })
+      .then(({ data }) => {
+        if (data?.fetched > 0) {
+          toast.success(`${data.fetched} detalhes de pedidos antigos sincronizados`);
+        }
+      })
+      .catch(() => { /* silencioso */ });
+
     await triggerSync('incremental');
+    // aguarda também os paralelos para recarregar com tudo
+    await Promise.allSettled([productsAllPromise, backfillPromise]);
     setLastUpdate(new Date());
     setIsRefreshing(false);
     toast.success("Dados sincronizados", { description: "Dashboard atualizado com sucesso." });
