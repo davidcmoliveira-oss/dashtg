@@ -39,14 +39,19 @@ interface CustomersListViewProps {
 export const CustomersListView = ({ customers, orders, isLoading, onCustomerClick }: CustomersListViewProps) => {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState<'value' | 'orders' | 'items'>('value');
   const itemsPerPage = 20;
 
   const formatCurrency = (value: number) =>
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
-  const filteredCustomers = customers.filter(c =>
-    c.customer_name.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCustomers = customers
+    .filter(c => c.customer_name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === 'orders') return b.total_orders - a.total_orders;
+      if (sortBy === 'items') return b.items_count - a.items_count;
+      return b.total_spend - a.total_spend;
+    });
 
   const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
   const paginatedCustomers = filteredCustomers.slice(
