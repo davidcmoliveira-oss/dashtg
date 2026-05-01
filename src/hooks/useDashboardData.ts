@@ -328,7 +328,7 @@ export const useDashboardData = () => {
         delivery_status: '',
         returned_flag: false,
         _numero: cached.numero || 0,
-        _items: detail?.items || [],
+        _items: (detail as any)?._enrichedItems || detail?.items || [],
       } as TinyOrder & { _items: any[]; _numero: number };
     }).filter(order => {
       if (!order.order_date) return false;
