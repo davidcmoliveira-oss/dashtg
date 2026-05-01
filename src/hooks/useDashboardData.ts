@@ -211,8 +211,8 @@ export const useDashboardData = () => {
       const detail = cachedDetails.get(cached.tiny_order_id);
       const orderDate = cached.data_pedido || '';
 
-      let productName = 'Sem nome';
-      let productCategory = 'Sem categoria';
+      let productName = '';
+      let productCategory = '';
       let itemsCount = 1;
       let skuList: string[] = [];
       let discount = 0;
@@ -231,7 +231,9 @@ export const useDashboardData = () => {
 
         const items = detail.items || [];
         if (items.length > 0) {
-          productName = items[0].product_name || 'Sem nome';
+          const firstItem = items[0];
+          productName = firstItem.product_name || firstItem.descricao || firstItem.sku || '';
+          productCategory = firstItem.categoria || firstItem.category || '';
           skuList = items.map((i: any) => i.sku).filter(Boolean);
           itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
         }
@@ -241,6 +243,14 @@ export const useDashboardData = () => {
           shippingState = detail.endereco_entrega.uf || '';
           cep = detail.endereco_entrega.cep || '';
         }
+      }
+
+      // Fallbacks: never use placeholder "Sem nome" — use order number identifier
+      if (!productName) {
+        productName = `Pedido #${cached.numero || cached.tiny_order_id}`;
+      }
+      if (!productCategory) {
+        productCategory = 'Sem categoria';
       }
 
       const valor = Number(cached.valor) || 0;
