@@ -134,6 +134,42 @@ export const normalizeChannel = (channel: string): string => {
   return mappings[normalized] || normalized;
 };
 
+export const normalizePaymentMethod = (raw: string | null | undefined): string => {
+  const v = (raw || '').toString().trim();
+  if (!v) return 'Não informado';
+  const lower = v.toLowerCase();
+  const map: Record<string, string> = {
+    'pix': 'Pix',
+    'dinheiro': 'Dinheiro',
+    'credito': 'Cartão de Crédito',
+    'crédito': 'Cartão de Crédito',
+    'cartao de credito': 'Cartão de Crédito',
+    'cartão de crédito': 'Cartão de Crédito',
+    'debito': 'Cartão de Débito',
+    'débito': 'Cartão de Débito',
+    'cartao de debito': 'Cartão de Débito',
+    'cartão de débito': 'Cartão de Débito',
+    'boleto': 'Boleto',
+    'multiplas': 'Múltiplas',
+    'múltiplas': 'Múltiplas',
+    'multiplas formas': 'Múltiplas',
+    'transferencia': 'Transferência',
+    'transferência': 'Transferência',
+    'vale alimentacao': 'Vale Alimentação',
+    'vale alimentação': 'Vale Alimentação',
+    'vale refeicao': 'Vale Refeição',
+    'vale refeição': 'Vale Refeição',
+    'não informado': 'Não informado',
+    'nao informado': 'Não informado',
+  };
+  return map[lower] || v.charAt(0).toUpperCase() + v.slice(1);
+};
+
+export const isValidPaymentMethod = (method: string | null | undefined): boolean => {
+  const v = (method || '').toString().trim().toLowerCase();
+  return !!v && v !== 'não informado' && v !== 'nao informado';
+};
+
 export const normalizeStatus = (status: string): string => {
   const lower = status?.toLowerCase() || '';
   if (['cancelado', 'canceled', 'cancelled'].includes(lower)) {
