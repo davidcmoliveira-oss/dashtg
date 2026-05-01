@@ -62,6 +62,7 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   const [productSortField, setProductSortField] = useState<ProductSortField>('spend_total');
   const [productSortDir, setProductSortDir] = useState<SortDirection>('desc');
   const [chartMetric, setChartMetric] = useState<'value' | 'items'>('value');
+  const [topProductsSort, setTopProductsSort] = useState<'value' | 'qty' | 'orders'>('value');
   const itemsPerPage = 20;
 
   const parseDate = (dateStr: string): Date => {
