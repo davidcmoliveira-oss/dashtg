@@ -65,9 +65,16 @@ const getDefaultDateRange = () => {
   return { start, end };
 };
 
+interface ProductCacheEntry {
+  sku: string;
+  nome: string | null;
+  categoria: string | null;
+}
+
 export const useDashboardData = () => {
   const [cachedOrders, setCachedOrders] = useState<CachedOrder[]>([]);
   const [cachedDetails, setCachedDetails] = useState<Map<number, CachedDetail>>(new Map());
+  const [productCache, setProductCache] = useState<Map<string, ProductCacheEntry>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,6 +161,27 @@ export const useDashboardData = () => {
         setCachedDetails(detailsMap);
         addLog(`Carregados ${detailsMap.size} detalhes do cache`);
       }
+
+      // Load product cache (sku -> nome, categoria) for enrichment
+      const productMap = new Map<string, ProductCacheEntry>();
+      let pPage = 0;
+      while (true) {
+        const pFrom = pPage * PAGE_SIZE;
+        const pTo = pFrom + PAGE_SIZE - 1;
+        const { data: pChunk, error: pErr } = await supabase
+          .from('tiny_products_cache')
+          .select('sku, nome, categoria')
+          .range(pFrom, pTo);
+        if (pErr) { console.error('Products cache error:', pErr.message); break; }
+        if (!pChunk || pChunk.length === 0) break;
+        pChunk.forEach((p: any) => {
+          if (p.sku) productMap.set(String(p.sku).trim(), p as ProductCacheEntry);
+        });
+        if (pChunk.length < PAGE_SIZE) break;
+        pPage++;
+      }
+      setProductCache(productMap);
+      addLog(`Carregados ${productMap.size} produtos do cache`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar cache';
       setError(message);
@@ -229,13 +257,30 @@ export const useDashboardData = () => {
         discount = Number(detail.desconto) || 0;
         freightCost = Number(detail.frete) || 0;
 
-        const items = detail.items || [];
+        const rawItems = detail.items || [];
+        // Enriquecer cada item com nome+categoria do cache de produtos
+        const items = rawItems.map((it: any) => {
+          const skuKey = String(it.sku || '').trim();
+          const cached = skuKey ? productCache.get(skuKey) : undefined;
+          return {
+            sku: skuKey,
+            product_name: cached?.nome || it.product_name || it.descricao || skuKey || '',
+            categoria: cached?.categoria || it.categoria || it.category || '',
+            qty: Number(it.qty) || 1,
+            unit_price: Number(it.unit_price) || 0,
+            total: Number(it.total) || 0,
+          };
+        });
         if (items.length > 0) {
           const firstItem = items[0];
-          productName = firstItem.product_name || firstItem.descricao || firstItem.sku || '';
-          productCategory = firstItem.categoria || firstItem.category || '';
+          // Use o primeiro item com categoria preenchida
+          const itemWithCat = items.find((i: any) => i.categoria) || firstItem;
+          productName = firstItem.product_name || '';
+          productCategory = itemWithCat.categoria || '';
           skuList = items.map((i: any) => i.sku).filter(Boolean);
           itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
+          // overwrite detail.items para uso no _items abaixo
+          (detail as any)._enrichedItems = items;
         }
 
         if (detail.endereco_entrega) {
@@ -283,7 +328,7 @@ export const useDashboardData = () => {
         delivery_status: '',
         returned_flag: false,
         _numero: cached.numero || 0,
-        _items: detail?.items || [],
+        _items: (detail as any)?._enrichedItems || detail?.items || [],
       } as TinyOrder & { _items: any[]; _numero: number };
     }).filter(order => {
       if (!order.order_date) return false;
@@ -319,7 +364,7 @@ export const useDashboardData = () => {
     });
 
     return mapped;
-  }, [cachedOrders, cachedDetails]);
+  }, [cachedOrders, cachedDetails, productCache]);
 
   // Filter orders based on current filters
   const filteredOrders = useMemo(() => {
@@ -428,12 +473,15 @@ export const useDashboardData = () => {
       const yearsSinceFirst = Math.max(1, (new Date().getTime() - firstOrderDate.getTime()) / (365 * 24 * 60 * 60 * 1000));
       const ordersPerYear = totalOrders / yearsSinceFirst;
 
+      // Top payment method — ignora valores vazios/desconhecidos
       let topPaymentMethod = 'Não informado';
       let maxCount = 0;
       data.paymentMethods.forEach((count, method) => {
+        const m = (method || '').trim();
+        if (!m || m.toLowerCase() === 'não informado' || m.toLowerCase() === 'nao informado') return;
         if (count > maxCount) {
           maxCount = count;
-          topPaymentMethod = method;
+          topPaymentMethod = m;
         }
       });
 

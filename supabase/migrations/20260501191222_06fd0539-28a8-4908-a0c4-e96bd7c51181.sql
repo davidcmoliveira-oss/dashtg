@@ -1,0 +1,1 @@
+DELETE FROM public.tiny_products_cache;

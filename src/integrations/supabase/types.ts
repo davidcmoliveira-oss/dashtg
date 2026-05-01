@@ -104,6 +104,45 @@ export type Database = {
         }
         Relationships: []
       }
+      tiny_products_cache: {
+        Row: {
+          categoria: string | null
+          fetched_at: string
+          id: string
+          marca: string | null
+          nome: string | null
+          preco: number | null
+          raw_json: Json | null
+          sku: string
+          tiny_product_id: number | null
+          unidade: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          fetched_at?: string
+          id?: string
+          marca?: string | null
+          nome?: string | null
+          preco?: number | null
+          raw_json?: Json | null
+          sku: string
+          tiny_product_id?: number | null
+          unidade?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          fetched_at?: string
+          id?: string
+          marca?: string | null
+          nome?: string | null
+          preco?: number | null
+          raw_json?: Json | null
+          sku?: string
+          tiny_product_id?: number | null
+          unidade?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
