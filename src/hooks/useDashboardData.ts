@@ -255,7 +255,7 @@ export const useDashboardData = () => {
 
       if (detail) {
         orderTime = detail.hora || undefined;
-        paymentMethod = detail.forma_pagamento || 'Não informado';
+        paymentMethod = normalizePaymentMethod(detail.forma_pagamento);
         discount = Number(detail.desconto) || 0;
         freightCost = Number(detail.frete) || 0;
 
@@ -475,15 +475,14 @@ export const useDashboardData = () => {
       const yearsSinceFirst = Math.max(1, (new Date().getTime() - firstOrderDate.getTime()) / (365 * 24 * 60 * 60 * 1000));
       const ordersPerYear = totalOrders / yearsSinceFirst;
 
-      // Top payment method — ignora valores vazios/desconhecidos
+      // Top payment method — usa apenas pagamentos válidos (ignora "Não informado")
       let topPaymentMethod = 'Não informado';
       let maxCount = 0;
       data.paymentMethods.forEach((count, method) => {
-        const m = (method || '').trim();
-        if (!m || m.toLowerCase() === 'não informado' || m.toLowerCase() === 'nao informado') return;
+        if (!isValidPaymentMethod(method)) return;
         if (count > maxCount) {
           maxCount = count;
-          topPaymentMethod = m;
+          topPaymentMethod = method;
         }
       });
 
