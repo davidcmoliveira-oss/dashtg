@@ -68,35 +68,70 @@ serve(async (req) => {
 
     for (const sku of toFetch) {
       try {
-        await delay(300);
-        const data = await tinyPost('https://api.tiny.com.br/api2/produto.obter.php', {
+        await delay(350);
+        // Etapa A: pesquisa para descobrir id do produto pelo código
+        const search = await tinyPost('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
           token, formato: 'JSON', pesquisa: sku,
         });
-        if (data.retorno?.status === 'Erro') {
-          const erros = data.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
-          if (isRateLimitError(erros)) {
-            console.error('Rate limited');
-            rateLimited = true;
-            break;
-          }
-          // Produto não encontrado — guardar entrada mínima para não tentar de novo
+        if (search.retorno?.status === 'Erro') {
+          const erros = search.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
+          if (isRateLimitError(erros)) { rateLimited = true; break; }
           rows.push({
             sku, nome: null, categoria: null, marca: null, unidade: null, preco: 0,
-            raw_json: { not_found: true, error: erros },
+            raw_json: { not_found: true, stage: 'search', error: erros },
             fetched_at: new Date().toISOString(),
           });
           continue;
         }
-        const p = data.retorno?.produto;
+        const produtos = search.retorno?.produtos || [];
+        // achar match exato pelo codigo
+        const match = produtos.find((p: any) => {
+          const pp = p.produto || p;
+          return String(pp.codigo || '').trim() === sku;
+        }) || produtos[0];
+        const found = match?.produto || match;
+        if (!found?.id) {
+          rows.push({
+            sku, nome: null, categoria: null, marca: null, unidade: null, preco: 0,
+            raw_json: { not_found: true, stage: 'search', error: 'no match' },
+            fetched_at: new Date().toISOString(),
+          });
+          continue;
+        }
+
+        // Etapa B: obter detalhes (categoria etc.)
+        await delay(350);
+        const det = await tinyPost('https://api.tiny.com.br/api2/produto.obter.php', {
+          token, formato: 'JSON', id: String(found.id),
+        });
+        if (det.retorno?.status === 'Erro') {
+          const erros = det.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
+          if (isRateLimitError(erros)) { rateLimited = true; break; }
+          // fallback: usa dados básicos da pesquisa
+          rows.push({
+            sku,
+            tiny_product_id: parseInt(found.id),
+            nome: found.nome || null,
+            categoria: null,
+            marca: found.marca || null,
+            unidade: found.unidade || null,
+            preco: parseFloat(found.preco) || 0,
+            raw_json: { search_only: true, search: found, error: erros },
+            fetched_at: new Date().toISOString(),
+          });
+          fetched++;
+          continue;
+        }
+        const p = det.retorno?.produto;
         if (p) {
           rows.push({
             sku,
-            tiny_product_id: p.id ? parseInt(p.id) : null,
-            nome: p.nome || null,
+            tiny_product_id: p.id ? parseInt(p.id) : parseInt(found.id),
+            nome: p.nome || found.nome || null,
             categoria: p.categoria || null,
-            marca: p.marca || null,
-            unidade: p.unidade || null,
-            preco: parseFloat(p.preco) || 0,
+            marca: p.marca || found.marca || null,
+            unidade: p.unidade || found.unidade || null,
+            preco: parseFloat(p.preco) || parseFloat(found.preco) || 0,
             raw_json: p,
             fetched_at: new Date().toISOString(),
           });
