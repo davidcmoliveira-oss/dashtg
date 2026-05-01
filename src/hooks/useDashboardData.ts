@@ -280,7 +280,8 @@ export const useDashboardData = () => {
           productName = firstItem.product_name || '';
           productCategory = itemWithCat.categoria || '';
           skuList = items.map((i: any) => i.sku).filter(Boolean);
-          itemsCount = items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0);
+          // items_count = produtos distintos no pedido (cada linha conta 1, ignorando peso/qty fracionária)
+          itemsCount = items.length;
           // overwrite detail.items para uso no _items abaixo
           (detail as any)._enrichedItems = items;
         }
