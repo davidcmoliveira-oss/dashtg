@@ -200,20 +200,10 @@ export const useDashboardData = () => {
     return [];
   }, [triggerSync, loadFromCache]);
 
-  // Initial load from cache + set up 5-minute auto-sync
+  // Initial load from cache (manual sync only via button)
   useEffect(() => {
     loadFromCache();
-
-    // Auto-sync every 5 minutes
-    syncIntervalRef.current = setInterval(() => {
-      addLog('Auto-sync (5 min)...');
-      triggerSync('incremental');
-    }, 5 * 60 * 1000);
-
-    return () => {
-      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
-    };
-  }, [loadFromCache, triggerSync]);
+  }, [loadFromCache]);
 
   // Transform cached data to TinyOrder format
   const orders: TinyOrder[] = useMemo(() => {
