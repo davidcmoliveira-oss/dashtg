@@ -8,6 +8,8 @@ import {
   ProductData,
   normalizeChannel,
   normalizeStatus,
+  normalizePaymentMethod,
+  isValidPaymentMethod,
   calculateDaysSinceLastPurchase,
   isActiveCustomer,
   calculateCLTV3Y,
