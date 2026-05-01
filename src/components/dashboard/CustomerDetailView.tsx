@@ -206,28 +206,42 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
     count: data.count,
   }));
 
-  // Top 5 Products from orders
-  const productMap = new Map<string, { name: string; qty: number; value: number; lastDate: string }>();
+  // Top Products from order items (qty conta produto inteiro = 1, ignorando peso fracionário)
+  const productMap = new Map<string, { name: string; qty: number; value: number; orders: number; lastDate: string }>();
   filteredOrders.forEach(order => {
-    const productName = order.product_name || `Produto ${order.order_id}`;
-    const existing = productMap.get(productName);
-    if (existing) {
-      existing.qty += order.items_count;
-      existing.value += order.total_paid;
-      if (parseDate(order.order_date) > parseDate(existing.lastDate)) {
-        existing.lastDate = order.order_date;
-      }
-    } else {
-      productMap.set(productName, {
-        name: productName,
-        qty: order.items_count,
-        value: order.total_paid,
-        lastDate: order.order_date,
+    const items = ((order as any)._items || []) as Array<{ sku: string; product_name: string; qty: number; total: number }>;
+    if (items.length > 0) {
+      items.forEach(it => {
+        const name = it.product_name || it.sku || 'Produto';
+        const existing = productMap.get(name);
+        if (existing) {
+          existing.qty += 1; // cada linha = 1 produto, ignora kg fracionário
+          existing.value += Number(it.total) || 0;
+          existing.orders += 1;
+          if (parseDate(order.order_date) > parseDate(existing.lastDate)) existing.lastDate = order.order_date;
+        } else {
+          productMap.set(name, { name, qty: 1, value: Number(it.total) || 0, orders: 1, lastDate: order.order_date });
+        }
       });
+    } else {
+      const productName = order.product_name || `Produto ${order.order_id}`;
+      const existing = productMap.get(productName);
+      if (existing) {
+        existing.qty += 1;
+        existing.value += order.total_paid;
+        existing.orders += 1;
+        if (parseDate(order.order_date) > parseDate(existing.lastDate)) existing.lastDate = order.order_date;
+      } else {
+        productMap.set(productName, { name: productName, qty: 1, value: order.total_paid, orders: 1, lastDate: order.order_date });
+      }
     }
   });
   const top5Products = Array.from(productMap.values())
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => {
+      if (topProductsSort === 'qty') return b.qty - a.qty;
+      if (topProductsSort === 'orders') return b.orders - a.orders;
+      return b.value - a.value;
+    })
     .slice(0, 5);
 
   // Products table with sorting and filtering
