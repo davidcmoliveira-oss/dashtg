@@ -10,6 +10,7 @@ import {
   normalizeStatus,
   normalizePaymentMethod,
   isValidPaymentMethod,
+  resolveProductCategory,
   calculateDaysSinceLastPurchase,
   isActiveCustomer,
   calculateCLTV3Y,
@@ -71,6 +72,7 @@ interface ProductCacheEntry {
   sku: string;
   nome: string | null;
   categoria: string | null;
+  unidade?: string | null;
 }
 
 export const useDashboardData = () => {
@@ -172,7 +174,7 @@ export const useDashboardData = () => {
         const pTo = pFrom + PAGE_SIZE - 1;
         const { data: pChunk, error: pErr } = await supabase
           .from('tiny_products_cache')
-          .select('sku, nome, categoria')
+          .select('sku, nome, categoria, unidade')
           .range(pFrom, pTo);
         if (pErr) { console.error('Products cache error:', pErr.message); break; }
         if (!pChunk || pChunk.length === 0) break;
@@ -264,13 +266,16 @@ export const useDashboardData = () => {
         const items = rawItems.map((it: any) => {
           const skuKey = String(it.sku || '').trim();
           const cached = skuKey ? productCache.get(skuKey) : undefined;
+          const productName = cached?.nome || it.product_name || it.descricao || skuKey || '';
+          const unit = cached?.unidade || it.unidade || it.unit || '';
           return {
             sku: skuKey,
-            product_name: cached?.nome || it.product_name || it.descricao || skuKey || '',
-            categoria: cached?.categoria || it.categoria || it.category || '',
+            product_name: productName,
+            categoria: resolveProductCategory(cached?.categoria || it.categoria || it.category, productName, skuKey, unit),
             qty: Number(it.qty) || 1,
             unit_price: Number(it.unit_price) || 0,
             total: Number(it.total) || 0,
+            unidade: unit,
           };
         });
         if (items.length > 0) {
@@ -383,7 +388,13 @@ export const useDashboardData = () => {
       if (orderDate < startDate || orderDate > endDate) return false;
       if (filters.salesChannel.length > 0 && !filters.salesChannel.includes(order.sales_channel)) return false;
       if (filters.paymentMethod.length > 0 && !filters.paymentMethod.includes(order.payment_method)) return false;
-      if (filters.productCategory.length > 0 && !filters.productCategory.includes(order.product_category)) return false;
+      if (filters.productCategory.length > 0) {
+        const itemCategories = ((order as any)._items || []).map((item: any) => item.categoria).filter(Boolean);
+        const matchesCategory = filters.productCategory.some(cat =>
+          order.product_category === cat || itemCategories.includes(cat)
+        );
+        if (!matchesCategory) return false;
+      }
       if (filters.customerId && order.customer_id !== filters.customerId) return false;
 
       if (order.order_time && filters.timeRange) {
@@ -419,7 +430,7 @@ export const useDashboardData = () => {
   const customers: CustomerData[] = useMemo(() => {
     // Para "cliente ativo" usar a ÚLTIMA compra real do cliente (dataset completo, sem filtro de data)
     const lastOrderDateByCustomer = new Map<string, string>();
-    orders.forEach(o => {
+    orders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(o => {
       const cur = lastOrderDateByCustomer.get(o.customer_id);
       if (!cur || parseBrazilianDate(o.order_date) > parseBrazilianDate(cur)) {
         lastOrderDateByCustomer.set(o.customer_id, o.order_date);
@@ -432,7 +443,7 @@ export const useDashboardData = () => {
       paymentMethods: Map<string, number>;
     }>();
 
-    filteredOrders.forEach(order => {
+    filteredOrders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(order => {
       const existing = customerMap.get(order.customer_id);
       if (existing) {
         existing.orders.push(order);
@@ -538,7 +549,7 @@ export const useDashboardData = () => {
       items.forEach((item: any) => {
         const productKey = item.product_name || item.sku;
         if (!productKey) return;
-        updateProductMap(productMap, productKey, productKey, item.qty, item.total, order.customer_id, orderDate, order.order_date);
+        updateProductMap(productMap, productKey, productKey, item.categoria || order.product_category, item.qty, item.total, order.customer_id, orderDate, order.order_date);
       });
     });
 
@@ -571,6 +582,7 @@ export const useDashboardData = () => {
       return {
         sku: p.sku,
         product_name: p.name,
+        product_category: p.category,
         total_qty: p.qty,
         total_revenue: p.revenue,
         total_orders: p.orders,
@@ -604,7 +616,10 @@ export const useDashboardData = () => {
   const filterOptions = useMemo(() => ({
     salesChannels: [...new Set(orders.map(o => o.sales_channel))],
     paymentMethods: [...new Set(orders.map(o => o.payment_method))],
-    categories: [...new Set(orders.map(o => o.product_category))],
+    categories: [...new Set(orders.flatMap(o => {
+      const itemCategories = ((o as any)._items || []).map((item: any) => item.categoria).filter(Boolean);
+      return [o.product_category, ...itemCategories].filter(Boolean);
+    }))].sort(),
     customers: [...new Set(orders.map(o => o.customer_name))],
   }), [orders]);
 
@@ -633,6 +648,7 @@ function updateProductMap(
   map: Map<string, any>,
   key: string,
   name: string,
+  category: string,
   qty: number,
   revenue: number,
   customerId: string,
@@ -657,7 +673,7 @@ function updateProductMap(
     weekdaySales[orderDate.getDay()] = 1;
     monthdaySales[orderDate.getDate() - 1] = 1;
     map.set(key, {
-      name, qty, revenue, orders: 1,
+      name, category, qty, revenue, orders: 1,
       lastSale: orderDateStr,
       customers: new Set([customerId]),
       weekdaySales, monthdaySales,

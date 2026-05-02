@@ -24,6 +24,30 @@ const tinyPost = async (endpoint: string, params: Record<string, string>) => {
 const isRateLimitError = (msg: string) => msg.includes('Bloqueada') || msg.includes('Excedido');
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+const normalizeText = (value: string | null | undefined): string =>
+  (value || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const inferCategory = (productName: string | null | undefined, sku = '', unit = ''): string => {
+  const text = normalizeText(`${productName || ''} ${sku || ''} ${unit || ''}`);
+  const has = (terms: string[]) => terms.some(term => text.includes(term));
+  if (has(['whey', 'creatina', 'protein', 'proteina', 'bcaa', 'glutamina', 'colageno', 'omega', 'pre treino', 'pre-treino', 'hipercalorico', 'albumina', 'termogenico', 'integralmedica', 'nutrata', 'dux', 'max titanium', 'sanavita'])) return 'Suplementos';
+  if (has(['agua', 'suco', 'refrigerante', 'energetico', 'kombucha', 'bebida', 'isotonico'])) return 'Bebidas';
+  if (has(['cha ', ' cha', 'camomila', 'hibisco', 'boldo', 'espinheira', 'sene', 'cavalinha', 'erva mate', 'capim cidreira'])) return 'Chás e Ervas';
+  if (has(['chimichurri', 'paprica', 'lemon pepper', 'curcuma', 'colorau', 'oregano', 'tempero', 'cominho', 'louro', 'pimenta', 'alho', 'canela', 'sal '])) return 'Temperos e Especiarias';
+  if (has(['farinha', 'farelo', 'polvilho', 'fuba'])) return 'Farinhas e Farelos';
+  if (has(['chia', 'linhaca', 'aveia', 'granola', 'quinoa', 'amaranto', 'gergelim', 'semente', 'cereal'])) return 'Grãos, Sementes e Cereais';
+  if (has(['castanha', 'nozes', 'amendoa', 'amendoim', 'pistache', 'avela'])) return 'Castanhas e Oleaginosas';
+  if (has(['uva passa', 'ameixa', 'damasco', 'tamara', 'goji', 'cranberry', 'fruta seca'])) return 'Frutas Secas';
+  if (has(['chips', 'fini', 'bala', 'doce', 'cocada', 'torradinha', 'snack', 'ovinho', 'pacoca'])) return 'Doces e Snacks';
+  if (normalizeText(unit) === 'kg' || /\bgr\b/.test(text)) return 'Granel';
+  return 'Sem categoria';
+};
+
+const resolveCategory = (category: string | null | undefined, productName: string | null | undefined, sku = '', unit = ''): string => {
+  const normalized = normalizeText(category);
+  return normalized && normalized !== 'sem categoria' ? String(category).trim() : inferCategory(productName, sku, unit);
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -68,7 +92,7 @@ serve(async (req) => {
               sku: String(p.codigo || '').trim(),
               tiny_product_id: p.id ? parseInt(p.id) : null,
               nome: p.nome || null,
-              categoria: null as string | null,
+              categoria: resolveCategory(null, p.nome, p.codigo, p.unidade),
               marca: p.marca || null,
               unidade: p.unidade || null,
               preco: parseFloat(p.preco) || 0,
@@ -117,16 +141,12 @@ serve(async (req) => {
             continue;
           }
           const p = det.retorno?.produto;
-          if (p && p.categoria) {
+          if (p) {
+            const categoria = resolveCategory(p.categoria, p.nome, (row as any).sku, p.unidade);
             await db.from('tiny_products_cache')
-              .update({ categoria: p.categoria, marca: p.marca || null, raw_json: p, fetched_at: new Date().toISOString() })
+              .update({ categoria, marca: p.marca || null, raw_json: p, fetched_at: new Date().toISOString() })
               .eq('sku', (row as any).sku);
             enriched++;
-          } else if (p) {
-            // marca como buscado para não retornar (categoria vazia mesmo)
-            await db.from('tiny_products_cache')
-              .update({ categoria: 'Sem categoria', raw_json: p, fetched_at: new Date().toISOString() })
-              .eq('sku', (row as any).sku);
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -185,7 +205,7 @@ serve(async (req) => {
           const erros = search.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
           if (isRateLimitError(erros)) { rateLimited = true; break; }
           rows.push({
-            sku, nome: null, categoria: null, marca: null, unidade: null, preco: 0,
+            sku, nome: null, categoria: resolveCategory(null, sku, sku), marca: null, unidade: null, preco: 0,
             raw_json: { not_found: true, stage: 'search', error: erros },
             fetched_at: new Date().toISOString(),
           });
@@ -200,7 +220,7 @@ serve(async (req) => {
         const found = match?.produto || match;
         if (!found?.id) {
           rows.push({
-            sku, nome: null, categoria: null, marca: null, unidade: null, preco: 0,
+            sku, nome: null, categoria: resolveCategory(null, sku, sku), marca: null, unidade: null, preco: 0,
             raw_json: { not_found: true, stage: 'search', error: 'no match' },
             fetched_at: new Date().toISOString(),
           });
@@ -220,7 +240,7 @@ serve(async (req) => {
             sku,
             tiny_product_id: parseInt(found.id),
             nome: found.nome || null,
-            categoria: null,
+            categoria: resolveCategory(null, found.nome, sku, found.unidade),
             marca: found.marca || null,
             unidade: found.unidade || null,
             preco: parseFloat(found.preco) || 0,
@@ -236,7 +256,7 @@ serve(async (req) => {
             sku,
             tiny_product_id: p.id ? parseInt(p.id) : parseInt(found.id),
             nome: p.nome || found.nome || null,
-            categoria: p.categoria || null,
+            categoria: resolveCategory(p.categoria, p.nome || found.nome, sku, p.unidade || found.unidade),
             marca: p.marca || found.marca || null,
             unidade: p.unidade || found.unidade || null,
             preco: parseFloat(p.preco) || parseFloat(found.preco) || 0,

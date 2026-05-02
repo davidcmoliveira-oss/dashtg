@@ -253,6 +253,7 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
           <TableHeader>
             <TableRow>
               <TableHead>Produto</TableHead>
+              <TableHead>Categoria</TableHead>
               <TableHead className="text-center">Classe</TableHead>
               <TableHead className="text-center">Qtd Vendida</TableHead>
               <TableHead className="text-right">Valor Total</TableHead>
@@ -264,7 +265,7 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
           <TableBody>
             {paginatedProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                   Nenhum produto encontrado
                 </TableCell>
               </TableRow>
@@ -280,6 +281,9 @@ export const ProductsView = ({ products, orders, isLoading, onCustomerClick }: P
                       <p className="font-medium">{product.product_name}</p>
                       <p className="text-xs text-muted-foreground">{product.sku}</p>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{product.product_category}</Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge 

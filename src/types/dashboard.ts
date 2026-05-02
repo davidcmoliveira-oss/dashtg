@@ -68,6 +68,7 @@ export interface ProductPurchase {
 export interface ProductData {
   sku: string;
   product_name: string;
+  product_category: string;
   total_qty: number;
   total_revenue: number;
   total_orders: number;
@@ -168,6 +169,72 @@ export const normalizePaymentMethod = (raw: string | null | undefined): string =
 export const isValidPaymentMethod = (method: string | null | undefined): boolean => {
   const v = (method || '').toString().trim().toLowerCase();
   return !!v && v !== 'não informado' && v !== 'nao informado';
+};
+
+const normalizeText = (value: string | null | undefined): string => {
+  return (value || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+};
+
+export const isPlaceholderCategory = (category: string | null | undefined): boolean => {
+  const v = normalizeText(category);
+  return !v || v === 'sem categoria' || v === 'null' || v === 'undefined';
+};
+
+export const inferProductCategory = (
+  productName: string | null | undefined,
+  sku = '',
+  unit = '',
+): string => {
+  const name = normalizeText(`${productName || ''} ${sku || ''} ${unit || ''}`);
+  const has = (terms: string[]) => terms.some(term => name.includes(term));
+
+  if (has(['whey', 'creatina', 'protein', 'proteina', 'bcaa', 'glutamina', 'colageno', 'omega', 'pre treino', 'pre-treino', 'hipercalorico', 'albumina', 'termogenico', 'integralmedica', 'nutrata', 'dux', 'max titanium', 'sanavita'])) {
+    return 'Suplementos';
+  }
+  if (has(['agua', 'suco', 'refrigerante', 'energetico', 'kombucha', 'bebida', 'isotonico'])) {
+    return 'Bebidas';
+  }
+  if (has(['cha ', ' cha', 'camomila', 'hibisco', 'boldo', 'espinheira', 'sene', 'cavalinha', 'erva mate', 'capim cidreira'])) {
+    return 'Chás e Ervas';
+  }
+  if (has(['chimichurri', 'paprica', 'lemon pepper', 'curcuma', 'colorau', 'oregano', 'tempero', 'cominho', 'louro', 'pimenta', 'alho', 'canela', 'sal '])) {
+    return 'Temperos e Especiarias';
+  }
+  if (has(['farinha', 'farelo', 'polvilho', 'fuba'])) {
+    return 'Farinhas e Farelos';
+  }
+  if (has(['chia', 'linhaca', 'aveia', 'granola', 'quinoa', 'amaranto', 'gergelim', 'semente', 'cereal'])) {
+    return 'Grãos, Sementes e Cereais';
+  }
+  if (has(['castanha', 'nozes', 'amendoa', 'amendoim', 'pistache', 'avelã', 'avela'])) {
+    return 'Castanhas e Oleaginosas';
+  }
+  if (has(['uva passa', 'ameixa', 'damasco', 'tamara', 'goji', 'cranberry', 'fruta seca'])) {
+    return 'Frutas Secas';
+  }
+  if (has(['chips', 'fini', 'bala', 'doce', 'cocada', 'torradinha', 'snack', 'ovinho', 'paçoca', 'pacoca'])) {
+    return 'Doces e Snacks';
+  }
+  if (normalizeText(unit) === 'kg' || /\bgr\b/.test(name)) {
+    return 'Granel';
+  }
+
+  return 'Sem categoria';
+};
+
+export const resolveProductCategory = (
+  category: string | null | undefined,
+  productName: string | null | undefined,
+  sku = '',
+  unit = '',
+): string => {
+  if (!isPlaceholderCategory(category)) return String(category).trim();
+  return inferProductCategory(productName, sku, unit);
 };
 
 export const normalizeStatus = (status: string): string => {

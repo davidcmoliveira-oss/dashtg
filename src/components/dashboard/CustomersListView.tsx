@@ -173,6 +173,15 @@ export const CustomersListView = ({ customers, orders, isLoading, onCustomerClic
   const categoryData = useMemo(() => {
     const map = new Map<string, { value: number; count: number }>();
     orders.forEach(o => {
+      const items = ((o as any)._items || []) as Array<{ categoria?: string; total?: number }>;
+      if (items.length > 0) {
+        items.forEach(item => {
+          const category = item.categoria || o.product_category;
+          const e = map.get(category) || { value: 0, count: 0 };
+          map.set(category, { value: e.value + (Number(item.total) || 0), count: e.count + 1 });
+        });
+        return;
+      }
       const e = map.get(o.product_category) || { value: 0, count: 0 };
       map.set(o.product_category, { value: e.value + o.total_paid, count: e.count + 1 });
     });

@@ -23,6 +23,17 @@ export const TopItemsCards = ({ orders, customers, products, isLoading, onCustom
   // Top categories
   const categoryMap = new Map<string, { count: number; revenue: number }>();
   orders.forEach(order => {
+    const items = ((order as any)._items || []) as Array<{ categoria?: string; total?: number }>;
+    if (items.length > 0) {
+      items.forEach(item => {
+        const category = item.categoria || order.product_category;
+        const existing = categoryMap.get(category) || { count: 0, revenue: 0 };
+        existing.count++;
+        existing.revenue += Number(item.total) || 0;
+        categoryMap.set(category, existing);
+      });
+      return;
+    }
     const existing = categoryMap.get(order.product_category) || { count: 0, revenue: 0 };
     existing.count++;
     existing.revenue += order.total_paid;

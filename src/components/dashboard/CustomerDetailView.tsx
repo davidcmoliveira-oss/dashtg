@@ -194,6 +194,18 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
   // Prepare category distribution
   const categoryMap = new Map<string, { value: number; count: number }>();
   filteredOrders.forEach(order => {
+    const items = ((order as any)._items || []) as Array<{ categoria?: string; total?: number }>;
+    if (items.length > 0) {
+      items.forEach(item => {
+        const category = item.categoria || order.product_category;
+        const existing = categoryMap.get(category) || { value: 0, count: 0 };
+        categoryMap.set(category, {
+          value: existing.value + (Number(item.total) || 0),
+          count: existing.count + 1,
+        });
+      });
+      return;
+    }
     const existing = categoryMap.get(order.product_category) || { value: 0, count: 0 };
     categoryMap.set(order.product_category, {
       value: existing.value + order.total_paid,
