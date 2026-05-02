@@ -616,7 +616,10 @@ export const useDashboardData = () => {
   const filterOptions = useMemo(() => ({
     salesChannels: [...new Set(orders.map(o => o.sales_channel))],
     paymentMethods: [...new Set(orders.map(o => o.payment_method))],
-    categories: [...new Set(orders.map(o => o.product_category))],
+    categories: [...new Set(orders.flatMap(o => {
+      const itemCategories = ((o as any)._items || []).map((item: any) => item.categoria).filter(Boolean);
+      return [o.product_category, ...itemCategories].filter(Boolean);
+    }))].sort(),
     customers: [...new Set(orders.map(o => o.customer_name))],
   }), [orders]);
 
