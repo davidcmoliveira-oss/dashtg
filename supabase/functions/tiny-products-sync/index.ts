@@ -24,6 +24,30 @@ const tinyPost = async (endpoint: string, params: Record<string, string>) => {
 const isRateLimitError = (msg: string) => msg.includes('Bloqueada') || msg.includes('Excedido');
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+const normalizeText = (value: string | null | undefined): string =>
+  (value || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+const inferCategory = (productName: string | null | undefined, sku = '', unit = ''): string => {
+  const text = normalizeText(`${productName || ''} ${sku || ''} ${unit || ''}`);
+  const has = (terms: string[]) => terms.some(term => text.includes(term));
+  if (has(['whey', 'creatina', 'protein', 'proteina', 'bcaa', 'glutamina', 'colageno', 'omega', 'pre treino', 'pre-treino', 'hipercalorico', 'albumina', 'termogenico', 'integralmedica', 'nutrata', 'dux', 'max titanium', 'sanavita'])) return 'Suplementos';
+  if (has(['agua', 'suco', 'refrigerante', 'energetico', 'kombucha', 'bebida', 'isotonico'])) return 'Bebidas';
+  if (has(['cha ', ' cha', 'camomila', 'hibisco', 'boldo', 'espinheira', 'sene', 'cavalinha', 'erva mate', 'capim cidreira'])) return 'Chás e Ervas';
+  if (has(['chimichurri', 'paprica', 'lemon pepper', 'curcuma', 'colorau', 'oregano', 'tempero', 'cominho', 'louro', 'pimenta', 'alho', 'canela', 'sal '])) return 'Temperos e Especiarias';
+  if (has(['farinha', 'farelo', 'polvilho', 'fuba'])) return 'Farinhas e Farelos';
+  if (has(['chia', 'linhaca', 'aveia', 'granola', 'quinoa', 'amaranto', 'gergelim', 'semente', 'cereal'])) return 'Grãos, Sementes e Cereais';
+  if (has(['castanha', 'nozes', 'amendoa', 'amendoim', 'pistache', 'avela'])) return 'Castanhas e Oleaginosas';
+  if (has(['uva passa', 'ameixa', 'damasco', 'tamara', 'goji', 'cranberry', 'fruta seca'])) return 'Frutas Secas';
+  if (has(['chips', 'fini', 'bala', 'doce', 'cocada', 'torradinha', 'snack', 'ovinho', 'pacoca'])) return 'Doces e Snacks';
+  if (normalizeText(unit) === 'kg' || /\bgr\b/.test(text)) return 'Granel';
+  return 'Sem categoria';
+};
+
+const resolveCategory = (category: string | null | undefined, productName: string | null | undefined, sku = '', unit = ''): string => {
+  const normalized = normalizeText(category);
+  return normalized && normalized !== 'sem categoria' ? String(category).trim() : inferCategory(productName, sku, unit);
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
