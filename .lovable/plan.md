@@ -1,65 +1,130 @@
+## Objetivo
 
+Substituir a atual `ReportsView.tsx` (genérica, baseada apenas em status de pedidos) por um **painel executivo de decisão**, com leitura rápida no topo e blocos analíticos profundos abaixo, terminando em um relatório dinâmico gerado por IA. Toda a tela usa os dados já disponíveis em `useDashboardData` (orders, customers, products, items, categorias normalizadas, formas de pagamento normalizadas) e respeita os filtros globais.
 
-## Plan: Tooltips em todos os cards + Campo de Insights com IA
+## Estrutura da nova tela
 
-### 1. Criar componente `MetricTooltip`
-Componente reutilizável que renderiza um ícone `Info` (lucide) no canto superior direito do card. Ao passar o mouse (`Tooltip` do Radix), exibe descrição da métrica e como é calculada.
-
-### 2. Adicionar tooltips a TODOS os cards do sistema
-
-| Tela | Cards | Exemplo de tooltip |
-|------|-------|--------------------|
-| **Dashboard (KPICards)** | Receita Total, Nº Pedidos, Ticket Médio, Clientes Únicos | "Receita Total: soma de total_paid de todos os pedidos faturados no período" |
-| **Clientes lista (CustomersListView)** | Total de Clientes, Clientes Ativos, Taxa de Recorrência | "Cliente ativo: fez pelo menos uma compra nos últimos 60 dias" |
-| **Cliente detalhe (CustomerDetailView)** | Ticket Médio, Total Gasto, Qtd Pedidos, Média Itens/Pedido, Dias s/ Compra, Média Dias entre Compras, Pagamento Mais Usado | "Ticket Médio: total gasto dividido pelo número de pedidos" |
-
-Manter os 3 cards originais (Total de Clientes, Clientes Ativos, Taxa de Recorrência) na tela de lista de clientes.
-
-### 3. Criar Edge Function `ai-insights`
-- Nova edge function `supabase/functions/ai-insights/index.ts`
-- Recebe `{ prompt, context }` via POST
-- Usa `LOVABLE_API_KEY` + Lovable AI Gateway (`google/gemini-3-flash-preview`)
-- Retorna a análise como texto (streaming não necessário para este caso)
-- Inclui CORS headers e tratamento de 429/402
-
-### 4. Criar componente `AiInsightsPanel`
-- Componente reutilizável usado em ambas as telas de clientes
-- Área de texto com prompt pré-preenchido:
-  - **Nível externo (lista)**: "Analise os indicadores gerais da base de clientes: [total clientes], [ativos], [taxa recorrência], [ticket médio geral], [receita total]. Identifique padrões, oportunidades e riscos."
-  - **Nível cliente**: "Analise os indicadores deste cliente: [nome], ticket médio [X], total gasto [X], [N] pedidos, última compra há [X] dias, média [X] dias entre compras. Identifique padrões de comportamento e sugestões."
-- Botão "Gerar Insights" que envia o prompt + dados contextuais para a edge function
-- Renderiza resposta com markdown (`react-markdown`)
-- Estado de loading com skeleton
-
-### 5. Integrar `AiInsightsPanel` nas telas
-- **CustomersListView**: após os 3 stat cards e antes do ranking
-- **CustomerDetailView**: após os 7 summary cards e antes dos gráficos
-
-### Arquivos a criar/modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/components/dashboard/MetricTooltip.tsx` | Criar — componente de tooltip informativo |
-| `src/components/dashboard/AiInsightsPanel.tsx` | Criar — painel de insights com IA |
-| `src/components/dashboard/KPICards.tsx` | Modificar — adicionar tooltips nos 4 cards |
-| `src/components/dashboard/CustomersListView.tsx` | Modificar — adicionar tooltips nos 3 cards + integrar AiInsightsPanel |
-| `src/components/dashboard/CustomerDetailView.tsx` | Modificar — adicionar tooltips nos 7 cards + integrar AiInsightsPanel |
-| `supabase/functions/ai-insights/index.ts` | Criar — edge function para chamadas à IA |
-
-### Detalhes técnicos
-
-**MetricTooltip**: Usa `Tooltip`/`TooltipTrigger`/`TooltipContent` do Radix (já existem em `src/components/ui/tooltip.tsx`). Ícone `Info` do Lucide, posicionado `absolute top-2 right-2`.
-
-**AiInsightsPanel**: 
-- Props: `defaultPrompt: string`, `contextData: Record<string, any>`
-- O prompt enviado ao backend combina o texto do usuário + JSON dos dados contextuais como system message
-- Usa `supabase.functions.invoke('ai-insights', { body: { prompt, context } })`
-- Resposta renderizada com `react-markdown` (precisará instalar o pacote)
-
-**Edge Function ai-insights**:
-```typescript
-// Usa LOVABLE_API_KEY para chamar https://ai.gateway.lovable.dev/v1/chat/completions
-// System prompt instrui a IA a analisar dados de dashboard de vendas
-// Não streaming — resposta completa em JSON { analysis: string }
+```text
+┌─────────────────────────────────────────────────────────┐
+│ Header + Seletor de comparação (Mês vs anterior /        │
+│ Semana vs mesma sem. mês passado / Hoje vs ontem / Custom)│
+├─────────────────────────────────────────────────────────┤
+│ 1. BLOCO COMPARATIVO PRINCIPAL                           │
+│    Cards (Δ abs + %): Faturamento, Pedidos, Clientes     │
+│    únicos, Ticket médio, Itens/pedido, Recorrentes,      │
+│    Novos, Inativos                                       │
+│    + Gráfico linha (atual vs anterior) + barras Δ        │
+│    + Tabela curta de altas/quedas                        │
+├─────────────────────────────────────────────────────────┤
+│ 2. CLIENTES INATIVOS        │ 3. PRODUTOS SEM VENDAS    │
+│    Faixas 15/30/45/60/90+   │    Faixas 7/15/30/60/90   │
+│    Ranking valor potencial  │    Tabela c/ semáforo     │
+│    Curva inatividade        │    Barras dias sem venda  │
+├─────────────────────────────────────────────────────────┤
+│ 4. CLUSTERS DE CLIENTES                                  │
+│    Cards por grupo + tabela comparativa + dispersão      │
+│    Frequência × Valor + top categorias por cluster       │
+├─────────────────────────────────────────────────────────┤
+│ 5. TENDÊNCIAS DE CLIENTES                                │
+│    Série temporal frequência/ticket/mix                  │
+│    Heatmap frequência + ranking de mudanças              │
+├─────────────────────────────────────────────────────────┤
+│ 6. RELATÓRIO PERSONALIZADO POR IA                        │
+│    Prompt + período + nível + comparação                 │
+│    Saída: resumo, variações, anomalias, oportunidades,   │
+│    riscos, recomendações + tabelas/gráficos de evidência │
+├─────────────────────────────────────────────────────────┤
+│ RELATÓRIOS COMPLEMENTARES (abas/accordion):              │
+│  • Recompra  • Concentração de receita  • Cesta média    │
+│    por categoria  • Recorrência por canal  • Sazonalidade│
+│  • Produtos âncora & complementares  • Cancelamentos     │
+└─────────────────────────────────────────────────────────┘
 ```
 
+## Arquivos a criar
+
+Sob `src/components/dashboard/reports/`:
+
+- `ReportsExecutivePanel.tsx` — bloco 1 (comparativo principal + seletor de comparação)
+- `InactiveCustomersReport.tsx` — bloco 2
+- `StaleProductsReport.tsx` — bloco 3
+- `CustomerClustersReport.tsx` — bloco 4
+- `CustomerTrendsReport.tsx` — bloco 5
+- `AiCustomReport.tsx` — bloco 6 (prompt + período + nível + comparação)
+- `RepurchaseReport.tsx`
+- `RevenueConcentrationReport.tsx` (curva de Pareto)
+- `BasketByCategoryReport.tsx`
+- `ChannelRecurrenceReport.tsx`
+- `SeasonalityReport.tsx`
+- `AnchorProductsReport.tsx`
+- `CancellationsReport.tsx`
+- `shared/ComparisonSelector.tsx` (Mês vs anterior / Semana / Hoje / Custom)
+- `shared/DeltaCard.tsx` (card com Δ absoluto e %)
+
+Hook utilitário:
+
+- `src/hooks/useReportsAnalytics.ts` — recebe `orders`, `customers`, `products`, `items` + período e retorna agregados memoizados para todos os blocos (faixas de inatividade, clusters, recompra, Pareto, coocorrência de categorias, séries com período anterior, etc.). Mantém a regra de venda válida (`faturado`, ignora `cancelled` e datas futuras).
+
+Edge function:
+
+- `supabase/functions/reports-ai/index.ts` — recebe `{ prompt, period, level, comparison, snapshot }` e chama Lovable AI Gateway (`google/gemini-3-flash-preview`) com system prompt focado em saída estruturada (resumo executivo, variações, anomalias, oportunidades, riscos, recomendações). Trata 429/402. Sem streaming (resposta única, mais simples para o painel). Adicionar bloco em `supabase/config.toml` se necessário.
+
+## Arquivos a editar
+
+- `src/components/dashboard/ReportsView.tsx` — reescrito como contêiner que recebe `orders/customers/products/filters` do `Index` e compõe os blocos acima. Aproveita `GlobalFilters` já existente no topo.
+- `src/pages/Index.tsx` — passa `customers`, `products`, `filters`, `setFilters` para `ReportsView` (hoje só passa `orders` simplificados). A entrada do menu “Relatórios” já existe na sidebar.
+- `src/types/dashboard.ts` — adicionar tipos auxiliares: `ComparisonPreset`, `CustomerCluster`, `InactivityBucket`, `StaleProductBucket`, `ReportSnapshot` (payload enviado à IA).
+
+## Regras de negócio aplicadas
+
+- **Vendas válidas**: somente `situacao = 'faturado'`, ignora `cancelled` e `data_pedido` futura (regra já existente em `useDashboardData`).
+- **Cliente ativo**: última compra histórica < 30 dias (não restrito ao filtro), conforme memória do projeto.
+- **Itens por pedido**: contar linhas distintas (`items.length`), não somar `qty` (granéis).
+- **Categoria/forma de pagamento**: usar `resolveProductCategory` e `normalizePaymentMethod` já implementados; ignorar “Não informado” em rankings de pagamento.
+- **Comparações**: período anterior calculado pelo mesmo tamanho de janela; YoY = mesma janela ano anterior.
+- **Cancelamentos**: relatório dedicado usa pedidos com status `cancelled`, fora das demais métricas.
+
+## Definições dos blocos analíticos
+
+### 1. Comparativo principal
+
+KPIs com Δ absoluto e %. Clientes recorrentes = têm ≥ 2 compras no histórico e compraram no período. Novos = primeira compra dentro do período. Inativos = sem compra há > 60 dias na data fim do período.
+
+### 2. Clientes inativos
+
+Buckets 15/30/45/60/90+ dias. Ranking ordenado por “valor potencial perdido” = ticket médio histórico × frequência média estimada no período de inatividade. Filtros: faixa de inatividade, segmento de valor (quartis), categoria mais comprada, forma de pagamento mais usada.
+
+### 3. Produtos sem vendas
+
+Para cada SKU vendido alguma vez: dias desde última venda; semáforo verde (<7), amarelo (7-30), laranja (30-60), vermelho (>60). Inclui receita histórica e quantidade no período anterior comparável. Filtros por categoria, marca, canal, faixa de valor.
+
+### 4. Clusters
+
+Regras determinísticas (sem ML) baseadas em frequência média e valor:
+
+- ≥1×/semana, semanal, mensal, one-shot, alto valor + baixa frequência, baixo valor + alta frequência, inativos com histórico forte.
+Para cada cluster: nº clientes, ticket médio, valor total, frequência média, intervalo médio, top categorias, forma pagamento mais usada, produto mais recorrente. Gráfico de dispersão Frequência × Valor (recharts ScatterChart).
+
+### 5. Tendências
+
+Série temporal (semanal/mensal) de frequência média, ticket médio, mix por categoria. Heatmap dia da semana × hora. Ranking de “mudança de comportamento”: clientes com maior variação Δ frequência ou Δ ticket entre dois subperíodos da janela.
+
+### 6. IA personalizada
+
+Form: Textarea de prompt, presets de período (atual filtro / 7d / 30d / custom), nível (geral, clientes, produtos, pedidos, mix, tendência), comparação (período anterior / YoY / custom). Envia para `reports-ai` snapshot resumido (KPIs + top N por categoria/cliente/produto + buckets de inatividade) — nunca dados crus completos. Renderiza Markdown + tabela de evidências quando o modelo retornar bloco `evidence` em JSON.
+
+### Relatórios complementares
+
+- **Recompra**: taxa, tempo médio entre 1ª e 2ª compra, ticket de recompra, retenção por coorte mensal até M+12.
+- **Concentração**: curva de Pareto clientes/produtos, % top10, distribuição por categoria.
+- **Cesta por categoria**: ticket médio quando categoria está presente, coocorrência (heatmap), categorias âncora vs complementares.
+- **Sazonalidade**: heatmap dia da semana × hora (buckets 3h), padrão por dia do mês.
+- **Âncora & complementares**: produtos que mais aparecem em pedidos de alto ticket + pares mais frequentes.
+
+## Notas técnicas
+
+- Reutilizar `recharts` (já no projeto) para line/bar/scatter/heatmap (heatmap via grid Tailwind + escala de cor).
+- Toda agregação no client (dados já vêm do cache local) via `useMemo` no novo `useReportsAnalytics`.
+- Loading states com `Skeleton`.
+- Exportação CSV reaproveita helper já existente em `OrdersTable.tsx` (extrair para `src/lib/csv.ts` se necessário).
+- Sem alterações de schema do banco.
