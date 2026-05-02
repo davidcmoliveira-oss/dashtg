@@ -549,7 +549,7 @@ export const useDashboardData = () => {
       items.forEach((item: any) => {
         const productKey = item.product_name || item.sku;
         if (!productKey) return;
-        updateProductMap(productMap, productKey, productKey, item.qty, item.total, order.customer_id, orderDate, order.order_date);
+        updateProductMap(productMap, productKey, productKey, item.categoria || order.product_category, item.qty, item.total, order.customer_id, orderDate, order.order_date);
       });
     });
 
@@ -582,6 +582,7 @@ export const useDashboardData = () => {
       return {
         sku: p.sku,
         product_name: p.name,
+        product_category: p.category,
         total_qty: p.qty,
         total_revenue: p.revenue,
         total_orders: p.orders,
