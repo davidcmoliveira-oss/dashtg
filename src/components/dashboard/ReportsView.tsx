@@ -1,167 +1,139 @@
-import { FileText, TrendingUp, TrendingDown, DollarSign, ShoppingCart } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
-
-interface Order {
-  id: string;
-  cliente: string;
-  valor: number;
-  status: 'pendente' | 'processando' | 'concluido' | 'cancelado';
-  data: string;
-}
+import { useState, useMemo } from "react";
+import { TinyOrder, CustomerData, ProductData } from "@/types/dashboard";
+import { useReportsAnalytics, ComparisonPreset } from "@/hooks/useReportsAnalytics";
+import { ReportsExecutivePanel } from "./reports/ReportsExecutivePanel";
+import { InactiveCustomersReport } from "./reports/InactiveCustomersReport";
+import { StaleProductsReport } from "./reports/StaleProductsReport";
+import { CustomerClustersReport } from "./reports/CustomerClustersReport";
+import { CustomerTrendsReport } from "./reports/CustomerTrendsReport";
+import { AiCustomReport } from "./reports/AiCustomReport";
+import { RepurchaseReport } from "./reports/RepurchaseReport";
+import { RevenueConcentrationReport } from "./reports/RevenueConcentrationReport";
+import { BasketByCategoryReport } from "./reports/BasketByCategoryReport";
+import { SeasonalityReport } from "./reports/SeasonalityReport";
+import { AnchorProductsReport } from "./reports/AnchorProductsReport";
+import { CancellationsReport } from "./reports/CancellationsReport";
+import { ChannelRecurrenceReport } from "./reports/ChannelRecurrenceReport";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 interface ReportsViewProps {
-  orders: Order[];
+  orders: TinyOrder[];
+  customers: CustomerData[];
+  products: ProductData[];
   isLoading?: boolean;
 }
 
-export const ReportsView = ({ orders, isLoading }: ReportsViewProps) => {
-  const totalRevenue = orders.reduce((sum, order) => sum + order.valor, 0);
-  const completedOrders = orders.filter(o => o.status === 'concluido');
-  const cancelledOrders = orders.filter(o => o.status === 'cancelado');
-  const pendingOrders = orders.filter(o => o.status === 'pendente' || o.status === 'processando');
-  
-  const completedRevenue = completedOrders.reduce((sum, order) => sum + order.valor, 0);
-  const cancelledRevenue = cancelledOrders.reduce((sum, order) => sum + order.valor, 0);
-  const pendingRevenue = pendingOrders.reduce((sum, order) => sum + order.valor, 0);
+export const ReportsView = ({ orders, customers, products, isLoading }: ReportsViewProps) => {
+  const [preset, setPreset] = useState<ComparisonPreset>("month_vs_prev");
+  const analytics = useReportsAnalytics(orders, customers, products, preset);
 
-  const taxaConclusao = orders.length > 0 ? (completedOrders.length / orders.length) * 100 : 0;
-  const taxaCancelamento = orders.length > 0 ? (cancelledOrders.length / orders.length) * 100 : 0;
+  const aiSnapshot = useMemo(() => ({
+    period: {
+      label: analytics.executive.range.label,
+      prevLabel: analytics.executive.range.prevLabel,
+      start: analytics.executive.range.start.toISOString(),
+      end: analytics.executive.range.end.toISOString(),
+    },
+    kpis_current: analytics.executive.current,
+    kpis_previous: analytics.executive.previous,
+    delta: analytics.executive.delta,
+    inactive_buckets: analytics.inactiveBuckets,
+    top_inactive_customers: analytics.inactiveList.slice(0, 10).map((c) => ({
+      name: c.customer_name,
+      days_inactive: c.days_inactive,
+      total_spend: c.total_spend,
+      avg_ticket: c.avg_ticket,
+      potential_lost: c.potential_lost,
+    })),
+    stale_products: analytics.staleProducts.slice(0, 15).map((p) => ({
+      name: p.product_name,
+      category: p.category,
+      days_without_sale: p.days_without_sale,
+      level: p.level,
+      revenue_total: p.revenue_total,
+    })),
+    clusters: analytics.clusters.map((cl) => ({
+      label: cl.label,
+      count: cl.count,
+      avg_ticket: cl.avg_ticket,
+      total_spend: cl.total_spend,
+      top_category: cl.top_category,
+      top_payment: cl.top_payment,
+    })),
+    repurchase: {
+      rate: analytics.repurchase.rate,
+      avg_days_to_second: analytics.repurchase.avg_days_to_second,
+      avg_repurchase_ticket: analytics.repurchase.avg_repurchase_ticket,
+    },
+    revenue_concentration: {
+      top10_customers_pct: analytics.pareto.top10_customers_pct,
+      top10_products_pct: analytics.pareto.top10_products_pct,
+      top_categories: analytics.pareto.by_category.slice(0, 5),
+    },
+    cancellations: { count: analytics.cancellations.count, value: analytics.cancellations.value },
+    behavior_change_top: analytics.behaviorChange.slice(0, 8),
+  }), [analytics]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+        <div className="h-32 bg-muted animate-pulse rounded-xl" />
+        <div className="h-64 bg-muted animate-pulse rounded-xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-slide-up">
-      <div className="mb-8">
+      <div>
         <h1 className="text-2xl font-bold">Relatórios</h1>
-        <p className="text-muted-foreground">Análise detalhada dos dados do Tiny ERP</p>
+        <p className="text-muted-foreground">Painel executivo de decisão</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <DollarSign className="h-4 w-4" />
-            <span className="text-sm">Receita Total</span>
-          </div>
-          <p className="text-2xl font-bold text-foreground">
-            {isLoading ? <Skeleton className="h-8 w-24" /> : `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <ShoppingCart className="h-4 w-4" />
-            <span className="text-sm">Total de Pedidos</span>
-          </div>
-          <p className="text-2xl font-bold">
-            {isLoading ? <Skeleton className="h-8 w-16" /> : orders.length}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <TrendingUp className="h-4 w-4 text-success" />
-            <span className="text-sm">Taxa de Conclusão</span>
-          </div>
-          <p className="text-2xl font-bold text-success">
-            {isLoading ? <Skeleton className="h-8 w-16" /> : `${taxaConclusao.toFixed(1)}%`}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <TrendingDown className="h-4 w-4 text-destructive" />
-            <span className="text-sm">Taxa de Cancelamento</span>
-          </div>
-          <p className="text-2xl font-bold text-destructive">
-            {isLoading ? <Skeleton className="h-8 w-16" /> : `${taxaCancelamento.toFixed(1)}%`}
-          </p>
-        </div>
-      </div>
+      <ReportsExecutivePanel
+        block={analytics.executive}
+        preset={preset}
+        onPresetChange={setPreset}
+      />
 
-      {/* Detailed Reports */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* By Status */}
-        <div className="rounded-xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Resumo por Situação</h3>
-          </div>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/20">
-              <div>
-                <p className="font-medium text-success">Concluídos</p>
-                <p className="text-sm text-muted-foreground">{completedOrders.length} pedidos</p>
-              </div>
-              <p className="text-lg font-bold text-success">
-                R$ {completedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-            
-            <div className="flex items-center justify-between p-3 rounded-lg bg-warning/10 border border-warning/20">
-              <div>
-                <p className="font-medium text-warning">Pendentes</p>
-                <p className="text-sm text-muted-foreground">{pendingOrders.length} pedidos</p>
-              </div>
-              <p className="text-lg font-bold text-warning">
-                R$ {pendingRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-            
-            <div className="flex items-center justify-between p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-              <div>
-                <p className="font-medium text-destructive">Cancelados</p>
-                <p className="text-sm text-muted-foreground">{cancelledOrders.length} pedidos</p>
-              </div>
-              <p className="text-lg font-bold text-destructive">
-                R$ {cancelledRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </p>
-            </div>
-          </div>
-        </div>
+        <InactiveCustomersReport
+          buckets={analytics.inactiveBuckets}
+          customers={analytics.inactiveList}
+        />
+        <StaleProductsReport products={analytics.staleProducts} />
+      </div>
 
-        {/* Top Customers */}
-        <div className="rounded-xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold">Top 5 Clientes</h3>
-          </div>
-          
-          <div className="space-y-3">
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
-              ))
-            ) : (
-              (() => {
-                const customerTotals = new Map<string, number>();
-                orders.forEach(order => {
-                  customerTotals.set(order.cliente, (customerTotals.get(order.cliente) || 0) + order.valor);
-                });
-                return Array.from(customerTotals.entries())
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 5)
-                  .map(([cliente, total], index) => (
-                    <div key={cliente} className="flex items-center justify-between p-3 rounded-lg bg-secondary/30">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                          {index + 1}
-                        </span>
-                        <p className="font-medium">{cliente}</p>
-                      </div>
-                      <p className="font-semibold">
-                        R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </p>
-                    </div>
-                  ));
-              })()
-            )}
-            {!isLoading && orders.length === 0 && (
-              <div className="text-center py-4 text-muted-foreground">
-                Nenhum dado disponível
-              </div>
-            )}
-          </div>
-        </div>
+      <CustomerClustersReport clusters={analytics.clusters} />
+
+      <CustomerTrendsReport
+        trendSeries={analytics.trendSeries}
+        behaviorChange={analytics.behaviorChange}
+      />
+
+      <AiCustomReport snapshot={aiSnapshot} />
+
+      <div>
+        <h2 className="text-xl font-bold mb-3">Relatórios complementares</h2>
+        <Tabs defaultValue="repurchase">
+          <TabsList className="flex-wrap h-auto">
+            <TabsTrigger value="repurchase">Recompra</TabsTrigger>
+            <TabsTrigger value="concentration">Concentração</TabsTrigger>
+            <TabsTrigger value="basket">Cesta por categoria</TabsTrigger>
+            <TabsTrigger value="channel">Canal × recorrência</TabsTrigger>
+            <TabsTrigger value="seasonality">Sazonalidade</TabsTrigger>
+            <TabsTrigger value="anchor">Âncoras / kits</TabsTrigger>
+            <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
+          </TabsList>
+          <TabsContent value="repurchase" className="mt-4"><RepurchaseReport data={analytics.repurchase} /></TabsContent>
+          <TabsContent value="concentration" className="mt-4"><RevenueConcentrationReport data={analytics.pareto} /></TabsContent>
+          <TabsContent value="basket" className="mt-4"><BasketByCategoryReport data={analytics.basket} /></TabsContent>
+          <TabsContent value="channel" className="mt-4"><ChannelRecurrenceReport data={analytics.channelRecurrence} /></TabsContent>
+          <TabsContent value="seasonality" className="mt-4"><SeasonalityReport data={analytics.seasonality} /></TabsContent>
+          <TabsContent value="anchor" className="mt-4"><AnchorProductsReport data={analytics.anchor} /></TabsContent>
+          <TabsContent value="cancellations" className="mt-4"><CancellationsReport data={analytics.cancellations} /></TabsContent>
+        </Tabs>
       </div>
     </div>
   );
