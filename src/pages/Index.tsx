@@ -35,6 +35,7 @@ const Index = () => {
 
   const {
     orders,
+    allOrders,
     customers,
     products,
     kpis,
@@ -160,6 +161,7 @@ const Index = () => {
             <CustomersListView
               customers={customers}
               orders={orders}
+              allOrders={allOrders}
               isLoading={isLoading}
               onCustomerClick={handleCustomerClick}
             />
