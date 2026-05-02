@@ -68,6 +68,7 @@ export interface ProductPurchase {
 export interface ProductData {
   sku: string;
   product_name: string;
+  product_category: string;
   total_qty: number;
   total_revenue: number;
   total_orders: number;
