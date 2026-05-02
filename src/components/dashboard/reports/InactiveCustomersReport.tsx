@@ -2,6 +2,8 @@ import { useState } from "react";
 import { InactivityBucket, InactiveCustomer } from "@/hooks/useReportsAnalytics";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { ReportHeader } from "./shared/ReportInfo";
+import { CHART_COLORS, CHART_DEFAULTS, fmtBRLk } from "@/lib/chartColors";
 
 interface Props {
   buckets: InactivityBucket[];
@@ -22,10 +24,19 @@ export const InactiveCustomersReport = ({ buckets, customers }: Props) => {
 
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Clientes inativos</h2>
-        <p className="text-sm text-muted-foreground">Risco de perda e oportunidades de reativação</p>
-      </div>
+      <ReportHeader
+        title="Clientes inativos"
+        subtitle="Risco de perda e oportunidades de reativação"
+        info={
+          <>
+            <p>Lista todos os clientes com <strong>≥ 15 dias</strong> sem compra (faturada).</p>
+            <p>
+              <strong>Potencial perdido</strong> = ticket médio do cliente × frequência anual estimada × (dias inativo / 365). Frequência anual = 365 / dias_entre_compras.
+            </p>
+            <p>Use as faixas para focar campanhas de reativação por urgência.</p>
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-5">
         {buckets.map((b) => (
@@ -46,11 +57,11 @@ export const InactiveCustomersReport = ({ buckets, customers }: Props) => {
           <h3 className="font-semibold mb-2 text-sm">Distribuição por faixa</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={buckets.map((b) => ({ name: b.label, clientes: b.customers }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="clientes" fill="hsl(var(--primary))" />
+              <CartesianGrid {...CHART_DEFAULTS.grid} />
+              <XAxis dataKey="name" tick={CHART_DEFAULTS.axisTick} />
+              <YAxis tick={CHART_DEFAULTS.axisTick} />
+              <Tooltip contentStyle={CHART_DEFAULTS.tooltipContentStyle} />
+              <Bar dataKey="clientes" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -58,11 +69,11 @@ export const InactiveCustomersReport = ({ buckets, customers }: Props) => {
           <h3 className="font-semibold mb-2 text-sm">Valor potencial perdido por faixa</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={buckets.map((b) => ({ name: b.label, valor: Math.round(b.potential_value) }))}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${Math.round(v / 1000)}k`} />
-              <Tooltip formatter={(v: number) => fmtBRL(v)} />
-              <Bar dataKey="valor" fill="hsl(var(--secondary))" />
+              <CartesianGrid {...CHART_DEFAULTS.grid} />
+              <XAxis dataKey="name" tick={CHART_DEFAULTS.axisTick} />
+              <YAxis tick={CHART_DEFAULTS.axisTick} tickFormatter={fmtBRLk} />
+              <Tooltip contentStyle={CHART_DEFAULTS.tooltipContentStyle} formatter={(v: number) => fmtBRL(v)} />
+              <Bar dataKey="valor" fill={CHART_COLORS.secondary} radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

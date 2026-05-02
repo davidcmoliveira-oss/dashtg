@@ -1,5 +1,7 @@
 import { ParetoStats } from "@/hooks/useReportsAnalytics";
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import { ReportHeader } from "./shared/ReportInfo";
+import { CHART_COLORS, CHART_DEFAULTS, fmtBRLk } from "@/lib/chartColors";
 
 interface Props { data: ParetoStats; }
 
@@ -8,10 +10,17 @@ const fmtBRL = (n: number) => `R$ ${(n || 0).toLocaleString("pt-BR", { minimumFr
 export const RevenueConcentrationReport = ({ data }: Props) => {
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Concentração de receita</h2>
-        <p className="text-sm text-muted-foreground">Risco e dependência de clientes e produtos</p>
-      </div>
+      <ReportHeader
+        title="Concentração de receita"
+        subtitle="Risco e dependência de clientes e produtos"
+        info={
+          <>
+            <p>Curva de Pareto: ordena clientes/produtos por receita decrescente e mostra o <strong>% acumulado</strong> da receita total.</p>
+            <p>"Top 10 clientes" = soma da receita dos 10 maiores ÷ receita total. Idem para produtos.</p>
+            <p>Quanto maior o %, maior a dependência — e o risco se algum top sair da base.</p>
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-border p-3">

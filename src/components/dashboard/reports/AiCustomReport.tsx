@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import { ReportInfo } from "./shared/ReportInfo";
 
 interface Props {
   snapshot: Record<string, any>;
@@ -66,6 +67,10 @@ export const AiCustomReport = ({ snapshot, defaultPrompt }: Props) => {
       <div className="flex items-center gap-2">
         <Sparkles className="h-5 w-5 text-primary" />
         <h2 className="text-lg font-bold">Relatório personalizado por IA</h2>
+        <ReportInfo>
+          <p>Envia um <strong>snapshot</strong> dos KPIs, clusters, inativos, recompra e produtos para um modelo de IA (Gemini), junto com sua pergunta.</p>
+          <p>O nível e a comparação ajustam o foco do prompt. Os dados nunca saem do seu projeto exceto para essa chamada.</p>
+        </ReportInfo>
       </div>
       <p className="text-sm text-muted-foreground">
         Pergunte qualquer coisa sobre o negócio. A IA usa um snapshot dos seus dados para responder com resumo executivo, variações, anomalias, oportunidades, riscos e recomendações.

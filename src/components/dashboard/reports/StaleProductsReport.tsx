@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { StaleProduct } from "@/hooks/useReportsAnalytics";
 import { Input } from "@/components/ui/input";
+import { ReportHeader } from "./shared/ReportInfo";
 
 interface Props {
   products: StaleProduct[];
