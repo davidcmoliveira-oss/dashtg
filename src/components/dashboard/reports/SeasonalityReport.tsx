@@ -1,5 +1,7 @@
 import { SeasonalityStats } from "@/hooks/useReportsAnalytics";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { ReportHeader } from "./shared/ReportInfo";
+import { CHART_COLORS, CHART_DEFAULTS } from "@/lib/chartColors";
 
 interface Props { data: SeasonalityStats; }
 
@@ -11,10 +13,16 @@ export const SeasonalityReport = ({ data }: Props) => {
 
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Sazonalidade</h2>
-        <p className="text-sm text-muted-foreground">Padrão por dia da semana, horário e dia do mês</p>
-      </div>
+      <ReportHeader
+        title="Sazonalidade"
+        subtitle="Padrão por dia da semana, horário e dia do mês"
+        info={
+          <>
+            <p>Conta pedidos faturados em todo o histórico por dia da semana × janela de 3 horas (00-03, 03-06, ...).</p>
+            <p>Quando o horário não está disponível na origem, é estimado em 12h. Ajuste sua operação a partir dos picos.</p>
+          </>
+        }
+      />
 
       <div>
         <h3 className="font-semibold mb-2 text-sm">Heatmap dia × horário (faixas de 3h)</h3>
@@ -51,11 +59,11 @@ export const SeasonalityReport = ({ data }: Props) => {
         <h3 className="font-semibold mb-2 text-sm">Pedidos por dia do mês</h3>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={data.by_monthday}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Bar dataKey="orders" fill="hsl(var(--primary))" />
+            <CartesianGrid {...CHART_DEFAULTS.grid} />
+            <XAxis dataKey="day" tick={CHART_DEFAULTS.axisTick} />
+            <YAxis tick={CHART_DEFAULTS.axisTick} />
+            <Tooltip contentStyle={CHART_DEFAULTS.tooltipContentStyle} />
+            <Bar dataKey="orders" fill={CHART_COLORS.primary} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

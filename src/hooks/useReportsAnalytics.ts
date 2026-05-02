@@ -277,20 +277,47 @@ export interface AnchorStats {
   pairs: Array<{ a: string; b: string; count: number }>;
 }
 
-export interface CancellationStats {
-  count: number;
-  value: number;
-  by_day: Array<{ date: string; count: number; value: number }>;
-  recent: Array<{ id: string; date: string; value: number; customer: string }>;
+export type BehaviorClassification =
+  | "acelerando"
+  | "desacelerando"
+  | "subindo_ticket"
+  | "caindo_ticket"
+  | "em_risco"
+  | "estavel";
+
+export interface BehaviorChangeRow {
+  customer_id: string;
+  name: string;
+  deltaFreq: number;
+  deltaTicket: number;
+  freqBefore: number;
+  freqAfter: number;
+  ticketBefore: number;
+  ticketAfter: number;
+  classification: BehaviorClassification;
+  last_order_date: string;
+  spark: number[];
 }
 
-export interface ChannelRecurrenceStats {
-  by_channel: Array<{
-    channel: string;
-    customers: number;
-    repurchase_rate: number;
-    avg_orders: number;
-  }>;
+export interface CrossSellRelated {
+  sku: string;
+  product_name: string;
+  category: string;
+  count: number;
+  pct_of_anchor: number;
+  combined_revenue: number;
+  avg_price: number;
+}
+
+export interface CustomerRecommendation extends CrossSellRelated {
+  reason: string;
+}
+
+export interface ProductIndexEntry {
+  sku: string;
+  name: string;
+  category: string;
+  avg_price: number;
 }
 
 export interface ReportsAnalytics {
@@ -300,14 +327,16 @@ export interface ReportsAnalytics {
   staleProducts: StaleProduct[];
   clusters: CustomerCluster[];
   trendSeries: Array<{ bucket: string; orders: number; revenue: number; avgTicket: number }>;
-  behaviorChange: Array<{ name: string; deltaFreq: number; deltaTicket: number }>;
+  behaviorChange: BehaviorChangeRow[];
   repurchase: RepurchaseStats;
   pareto: ParetoStats;
   basket: BasketStats;
   seasonality: SeasonalityStats;
   anchor: AnchorStats;
-  cancellations: CancellationStats;
-  channelRecurrence: ChannelRecurrenceStats;
+  productIndex: Map<string, ProductIndexEntry>;
+  productList: ProductIndexEntry[];
+  getRelatedBySku: (sku: string, n?: number) => CrossSellRelated[];
+  getRecommendationsForCustomer: (customerId: string, n?: number) => CustomerRecommendation[];
 }
 
 export const useReportsAnalytics = (
@@ -577,21 +606,48 @@ export const useReportsAnalytics = (
     };
     const h1 = halfStats(range.start, mid);
     const h2 = halfStats(mid, range.end);
-    const behaviorChange: ReportsAnalytics["behaviorChange"] = [];
+    const behaviorChange: BehaviorChangeRow[] = [];
     const allCust = new Set([...h1.keys(), ...h2.keys()]);
+    const weeks = 8;
+    const sparkMap = new Map<string, number[]>();
+    validOrders.forEach((o) => {
+      const d = parseBR(o.order_date);
+      if (isNaN(d.getTime())) return;
+      const diff = (range.end.getTime() - d.getTime()) / 86400000;
+      if (diff < 0 || diff > weeks * 7) return;
+      const idx = weeks - 1 - Math.min(weeks - 1, Math.floor(diff / 7));
+      if (!sparkMap.has(o.customer_id)) sparkMap.set(o.customer_id, Array(weeks).fill(0));
+      sparkMap.get(o.customer_id)![idx] += o.net_revenue || o.total_paid || 0;
+    });
     allCust.forEach((cid) => {
       const a = h1.get(cid) || { freq: 0, ticket: 0, orders: 0 };
       const b = h2.get(cid) || { freq: 0, ticket: 0, orders: 0 };
       const ta = a.orders ? a.ticket / a.orders : 0;
       const tb = b.orders ? b.ticket / b.orders : 0;
       const customer = customers.find((c) => c.customer_id === cid);
+      const deltaFreq = b.freq - a.freq;
+      const deltaTicket = tb - ta;
+      let classification: BehaviorClassification = "estavel";
+      if (b.freq === 0 && a.freq > 0) classification = "em_risco";
+      else if (deltaFreq >= 2) classification = "acelerando";
+      else if (deltaFreq <= -2) classification = "desacelerando";
+      else if (ta > 0 && (tb - ta) / ta >= 0.2) classification = "subindo_ticket";
+      else if (ta > 0 && (tb - ta) / ta <= -0.2) classification = "caindo_ticket";
       behaviorChange.push({
+        customer_id: cid,
         name: customer?.customer_name || cid,
-        deltaFreq: b.freq - a.freq,
-        deltaTicket: tb - ta,
+        deltaFreq,
+        deltaTicket,
+        freqBefore: a.freq,
+        freqAfter: b.freq,
+        ticketBefore: ta,
+        ticketAfter: tb,
+        classification,
+        last_order_date: customer?.last_order_date || "",
+        spark: sparkMap.get(cid) || Array(weeks).fill(0),
       });
     });
-    behaviorChange.sort((x, y) => Math.abs(y.deltaFreq) + Math.abs(y.deltaTicket) - Math.abs(x.deltaFreq) - Math.abs(x.deltaTicket));
+    behaviorChange.sort((x, y) => (Math.abs(y.deltaFreq) * 100 + Math.abs(y.deltaTicket)) - (Math.abs(x.deltaFreq) * 100 + Math.abs(x.deltaTicket)));
 
     // Repurchase
     let withSecond = 0;
@@ -801,55 +857,157 @@ export const useReportsAnalytics = (
         .slice(0, 15),
     };
 
-    // Cancellations
-    const cancelled = orders.filter((o) => (o.status || "").toLowerCase() === "cancelled");
-    const byDayMap = new Map<string, { count: number; value: number }>();
-    cancelled.forEach((o) => {
-      const k = o.order_date;
-      const cur = byDayMap.get(k) || { count: 0, value: 0 };
-      cur.count += 1;
-      cur.value += o.total_paid || 0;
-      byDayMap.set(k, cur);
-    });
-    const cancellations: CancellationStats = {
-      count: cancelled.length,
-      value: cancelled.reduce((a, o) => a + (o.total_paid || 0), 0),
-      by_day: [...byDayMap.entries()].map(([date, v]) => ({ date, ...v })),
-      recent: cancelled.slice(0, 10).map((o) => ({
-        id: o.order_id,
-        date: o.order_date,
-        value: o.total_paid || 0,
-        customer: o.customer_name,
-      })),
-    };
+    // Cross-sell co-occurrence
+    // Map: skuA -> Map<skuB, { count, revenue }>
+    const coOccurrence = new Map<string, Map<string, { count: number; revenue: number }>>();
+    const skuPriceSum = new Map<string, { sum: number; count: number; name: string; category: string }>();
 
-    // Channel recurrence
-    const byChannel = new Map<string, { customers: Set<string>; orders: number; repurchasers: Set<string> }>();
-    const customerChannelOrders = new Map<string, Map<string, number>>();
     validOrders.forEach((o) => {
-      const ch = o.sales_channel || "unknown";
-      if (!byChannel.has(ch)) byChannel.set(ch, { customers: new Set(), orders: 0, repurchasers: new Set() });
-      const slot = byChannel.get(ch)!;
-      slot.customers.add(o.customer_id);
-      slot.orders += 1;
-      if (!customerChannelOrders.has(ch)) customerChannelOrders.set(ch, new Map());
-      const m = customerChannelOrders.get(ch)!;
-      m.set(o.customer_id, (m.get(o.customer_id) || 0) + 1);
+      const items: any[] = (o as any)._items || [];
+      const uniqueSkus = new Map<string, { name: string; category: string; price: number }>();
+      items.forEach((it) => {
+        const sku = String(it.sku || "").trim();
+        if (!sku) return;
+        if (!uniqueSkus.has(sku)) {
+          uniqueSkus.set(sku, {
+            name: it.product_name || sku,
+            category: it.categoria || "",
+            price: Number(it.unit_price) || (Number(it.total) / Math.max(1, Number(it.qty) || 1)) || 0,
+          });
+        }
+      });
+      // accumulate price/name/category
+      uniqueSkus.forEach((info, sku) => {
+        const cur = skuPriceSum.get(sku) || { sum: 0, count: 0, name: info.name, category: info.category };
+        cur.sum += info.price;
+        cur.count += 1;
+        if (!cur.name) cur.name = info.name;
+        if (!cur.category && info.category) cur.category = info.category;
+        skuPriceSum.set(sku, cur);
+      });
+      const skus = [...uniqueSkus.keys()];
+      for (let i = 0; i < skus.length; i++) {
+        for (let j = 0; j < skus.length; j++) {
+          if (i === j) continue;
+          const a = skus[i];
+          const b = skus[j];
+          if (!coOccurrence.has(a)) coOccurrence.set(a, new Map());
+          const inner = coOccurrence.get(a)!;
+          const cur = inner.get(b) || { count: 0, revenue: 0 };
+          cur.count += 1;
+          cur.revenue += Number(uniqueSkus.get(b)?.price) || 0;
+          inner.set(b, cur);
+        }
+      }
     });
-    customerChannelOrders.forEach((m, ch) => {
-      m.forEach((cnt, cid) => {
-        if (cnt >= 2) byChannel.get(ch)!.repurchasers.add(cid);
+
+    // Product index merging products list with skus seen in orders
+    const productIndex = new Map<string, ProductIndexEntry>();
+    products.forEach((p) => {
+      productIndex.set(p.sku, {
+        sku: p.sku,
+        name: p.product_name,
+        category: p.product_category || "",
+        avg_price: p.total_qty ? p.total_revenue / p.total_qty : 0,
       });
     });
-    const channelRecurrence: ChannelRecurrenceStats = {
-      by_channel: [...byChannel.entries()]
-        .map(([channel, v]) => ({
-          channel,
-          customers: v.customers.size,
-          repurchase_rate: v.customers.size ? v.repurchasers.size / v.customers.size : 0,
-          avg_orders: v.customers.size ? v.orders / v.customers.size : 0,
-        }))
-        .sort((a, b) => b.customers - a.customers),
+    skuPriceSum.forEach((v, sku) => {
+      if (!productIndex.has(sku)) {
+        productIndex.set(sku, {
+          sku,
+          name: v.name || sku,
+          category: v.category || "",
+          avg_price: v.count ? v.sum / v.count : 0,
+        });
+      } else {
+        const cur = productIndex.get(sku)!;
+        if (!cur.category && v.category) cur.category = v.category;
+        if (!cur.avg_price && v.count) cur.avg_price = v.sum / v.count;
+      }
+    });
+    const productList = [...productIndex.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    // Anchor totals (count of orders containing each sku) for pct_of_anchor
+    const skuOrderCount = new Map<string, number>();
+    validOrders.forEach((o) => {
+      const items: any[] = (o as any)._items || [];
+      const seen = new Set<string>();
+      items.forEach((it) => {
+        const sku = String(it.sku || "").trim();
+        if (sku) seen.add(sku);
+      });
+      seen.forEach((sku) => skuOrderCount.set(sku, (skuOrderCount.get(sku) || 0) + 1));
+    });
+
+    const getRelatedBySku = (sku: string, n = 5): CrossSellRelated[] => {
+      const inner = coOccurrence.get(sku);
+      if (!inner) return [];
+      const anchorCount = skuOrderCount.get(sku) || 1;
+      return [...inner.entries()]
+        .map(([otherSku, v]) => {
+          const meta = productIndex.get(otherSku);
+          return {
+            sku: otherSku,
+            product_name: meta?.name || otherSku,
+            category: meta?.category || "",
+            count: v.count,
+            pct_of_anchor: (v.count / anchorCount) * 100,
+            combined_revenue: v.revenue,
+            avg_price: meta?.avg_price || 0,
+          };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, n);
+    };
+
+    const getRecommendationsForCustomer = (
+      customerId: string,
+      n = 5,
+    ): CustomerRecommendation[] => {
+      const cust = customers.find((c) => c.customer_id === customerId);
+      if (!cust) return [];
+      const ownedSkus = new Set<string>();
+      cust.orders.forEach((o) => {
+        const items: any[] = (o as any)._items || [];
+        items.forEach((it) => {
+          const sku = String(it.sku || "").trim();
+          if (sku) ownedSkus.add(sku);
+        });
+      });
+      // Score recommendations
+      const score = new Map<string, { score: number; bestSource: string; bestCount: number }>();
+      ownedSkus.forEach((src) => {
+        const inner = coOccurrence.get(src);
+        if (!inner) return;
+        const srcMeta = productIndex.get(src);
+        inner.forEach((v, otherSku) => {
+          if (ownedSkus.has(otherSku)) return;
+          const cur = score.get(otherSku) || { score: 0, bestSource: "", bestCount: 0 };
+          cur.score += v.count;
+          if (v.count > cur.bestCount) {
+            cur.bestCount = v.count;
+            cur.bestSource = srcMeta?.name || src;
+          }
+          score.set(otherSku, cur);
+        });
+      });
+      return [...score.entries()]
+        .sort((a, b) => b[1].score - a[1].score)
+        .slice(0, n)
+        .map(([sku, s]) => {
+          const meta = productIndex.get(sku);
+          const anchorCount = skuOrderCount.get(sku) || 1;
+          return {
+            sku,
+            product_name: meta?.name || sku,
+            category: meta?.category || "",
+            count: s.score,
+            pct_of_anchor: (s.bestCount / anchorCount) * 100,
+            combined_revenue: 0,
+            avg_price: meta?.avg_price || 0,
+            reason: `Vendido junto com "${s.bestSource}" em ${s.bestCount} pedidos`,
+          };
+        });
     };
 
     return {
@@ -859,14 +1017,16 @@ export const useReportsAnalytics = (
       staleProducts,
       clusters,
       trendSeries,
-      behaviorChange: behaviorChange.slice(0, 15),
+      behaviorChange: behaviorChange.slice(0, 30),
       repurchase,
       pareto,
       basket,
       seasonality,
       anchor,
-      cancellations,
-      channelRecurrence,
+      productIndex,
+      productList,
+      getRelatedBySku,
+      getRecommendationsForCustomer,
     };
   }, [orders, customers, products, preset, custom?.start, custom?.end]);
 };

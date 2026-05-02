@@ -3,6 +3,7 @@ import { DeltaCard } from "./shared/DeltaCard";
 import { ComparisonSelector } from "./shared/ComparisonSelector";
 import { ComparisonPreset } from "@/hooks/useReportsAnalytics";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, CartesianGrid } from "recharts";
+import { ReportInfo } from "./shared/ReportInfo";
 
 interface Props {
   block: ExecutiveBlock;
@@ -41,7 +42,14 @@ export const ReportsExecutivePanel = ({ block, preset, onPresetChange }: Props) 
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Comparativo executivo</h2>
+          <div className="flex items-center gap-1">
+            <h2 className="text-xl font-bold">Comparativo executivo</h2>
+            <ReportInfo>
+              <p>KPIs sobre pedidos com status <strong>faturado</strong> no período selecionado vs período anterior equivalente.</p>
+              <p><strong>Receita</strong> = soma de net_revenue. <strong>Ticket</strong> = receita / pedidos. <strong>Itens/pedido</strong> conta cada SKU como 1 item (granéis em kg ainda contam como 1).</p>
+              <p><strong>Recorrentes</strong>: clientes com 2+ pedidos no histórico. <strong>Inativos</strong>: sem pedido nos últimos 60 dias.</p>
+            </ReportInfo>
+          </div>
           <p className="text-sm text-muted-foreground">
             {range.label} vs {range.prevLabel}
           </p>

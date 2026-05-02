@@ -1,130 +1,99 @@
-## Objetivo
+## Reestruturação da página de Relatórios
 
-Substituir a atual `ReportsView.tsx` (genérica, baseada apenas em status de pedidos) por um **painel executivo de decisão**, com leitura rápida no topo e blocos analíticos profundos abaixo, terminando em um relatório dinâmico gerado por IA. Toda a tela usa os dados já disponíveis em `useDashboardData` (orders, customers, products, items, categorias normalizadas, formas de pagamento normalizadas) e respeita os filtros globais.
+Reorganizar o painel em **abas temáticas** (em vez de uma página longa), remover relatórios não desejados, melhorar gráficos/cores, enriquecer Clusters e Mudanças de Comportamento, adicionar tooltip de "Como é calculado" em todos os blocos e introduzir o relatório principal de **Cross-sell / Recomendação**.
 
-## Estrutura da nova tela
+### 1. Nova estrutura em abas
+
+Header fixo com título + `ComparisonSelector` + chip de período. Abaixo, um único `Tabs` com 6 abas:
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│ Header + Seletor de comparação (Mês vs anterior /        │
-│ Semana vs mesma sem. mês passado / Hoje vs ontem / Custom)│
-├─────────────────────────────────────────────────────────┤
-│ 1. BLOCO COMPARATIVO PRINCIPAL                           │
-│    Cards (Δ abs + %): Faturamento, Pedidos, Clientes     │
-│    únicos, Ticket médio, Itens/pedido, Recorrentes,      │
-│    Novos, Inativos                                       │
-│    + Gráfico linha (atual vs anterior) + barras Δ        │
-│    + Tabela curta de altas/quedas                        │
-├─────────────────────────────────────────────────────────┤
-│ 2. CLIENTES INATIVOS        │ 3. PRODUTOS SEM VENDAS    │
-│    Faixas 15/30/45/60/90+   │    Faixas 7/15/30/60/90   │
-│    Ranking valor potencial  │    Tabela c/ semáforo     │
-│    Curva inatividade        │    Barras dias sem venda  │
-├─────────────────────────────────────────────────────────┤
-│ 4. CLUSTERS DE CLIENTES                                  │
-│    Cards por grupo + tabela comparativa + dispersão      │
-│    Frequência × Valor + top categorias por cluster       │
-├─────────────────────────────────────────────────────────┤
-│ 5. TENDÊNCIAS DE CLIENTES                                │
-│    Série temporal frequência/ticket/mix                  │
-│    Heatmap frequência + ranking de mudanças              │
-├─────────────────────────────────────────────────────────┤
-│ 6. RELATÓRIO PERSONALIZADO POR IA                        │
-│    Prompt + período + nível + comparação                 │
-│    Saída: resumo, variações, anomalias, oportunidades,   │
-│    riscos, recomendações + tabelas/gráficos de evidência │
-├─────────────────────────────────────────────────────────┤
-│ RELATÓRIOS COMPLEMENTARES (abas/accordion):              │
-│  • Recompra  • Concentração de receita  • Cesta média    │
-│    por categoria  • Recorrência por canal  • Sazonalidade│
-│  • Produtos âncora & complementares  • Cancelamentos     │
-└─────────────────────────────────────────────────────────┘
+┌─ Relatórios ──────────────────────────────────────────┐
+│  [ Visão Executiva ] [ Cross-sell ★ ] [ Clientes ]    │
+│  [ Produtos ] [ Comportamento ] [ IA ]                │
+└───────────────────────────────────────────────────────┘
 ```
 
-## Arquivos a criar
+- **Visão Executiva**: `ReportsExecutivePanel` + `RevenueConcentrationReport` (Pareto resumido).
+- **Cross-sell ★** (NOVA — relatório principal, abre por padrão): ver seção 4.
+- **Clientes**: `InactiveCustomersReport` + `CustomerClustersReport` (versão melhorada) + `RepurchaseReport`.
+- **Produtos**: `StaleProductsReport` + `AnchorProductsReport` + `BasketByCategoryReport`.
+- **Comportamento**: `CustomerTrendsReport` (versão melhorada) + `SeasonalityReport`.
+- **IA**: `AiCustomReport`.
 
-Sob `src/components/dashboard/reports/`:
+### 2. Remoções
 
-- `ReportsExecutivePanel.tsx` — bloco 1 (comparativo principal + seletor de comparação)
-- `InactiveCustomersReport.tsx` — bloco 2
-- `StaleProductsReport.tsx` — bloco 3
-- `CustomerClustersReport.tsx` — bloco 4
-- `CustomerTrendsReport.tsx` — bloco 5
-- `AiCustomReport.tsx` — bloco 6 (prompt + período + nível + comparação)
-- `RepurchaseReport.tsx`
-- `RevenueConcentrationReport.tsx` (curva de Pareto)
-- `BasketByCategoryReport.tsx`
-- `ChannelRecurrenceReport.tsx`
-- `SeasonalityReport.tsx`
-- `AnchorProductsReport.tsx`
-- `CancellationsReport.tsx`
-- `shared/ComparisonSelector.tsx` (Mês vs anterior / Semana / Hoje / Custom)
-- `shared/DeltaCard.tsx` (card com Δ absoluto e %)
+- Excluir `ChannelRecurrenceReport` da UI e do `useReportsAnalytics` (`channelRecurrence`).
+- Excluir `CancellationsReport` da UI e do `useReportsAnalytics` (`cancellations`).
+- Remover imports e snapshot AI correspondentes.
 
-Hook utilitário:
+### 3. Melhorias visuais e de UX (todos os relatórios)
 
-- `src/hooks/useReportsAnalytics.ts` — recebe `orders`, `customers`, `products`, `items` + período e retorna agregados memoizados para todos os blocos (faixas de inatividade, clusters, recompra, Pareto, coocorrência de categorias, séries com período anterior, etc.). Mantém a regra de venda válida (`faturado`, ignora `cancelled` e datas futuras).
+- **Paleta unificada por tokens semânticos** (HSL via `hsl(var(--primary))`, `--secondary`, `--accent`, `--destructive`, `--muted`). Definir paleta de séries em `src/lib/chartColors.ts` com 6 cores acessíveis derivadas dos tokens (sem cores fixas).
+- Padronizar Recharts: `CartesianGrid` discreto, eixos com `fontSize: 11`, tooltip customizado branco com borda `--border`, legend abaixo.
+- Espaçamento consistente: cada bloco em `Card` (shadcn) com `CardHeader` + ícone + **InfoTooltip** "Como é calculado?".
+- Criar `src/components/dashboard/reports/shared/ReportInfo.tsx`: ícone `Info` (lucide) com `HoverCard` exibindo texto explicativo passado por prop.
+- Adoção em **todos** os relatórios — texto curto descrevendo fonte de dados, filtros aplicados (faturado, período) e fórmula.
 
-Edge function:
+### 4. Novo relatório: Cross-sell e Recomendação (principal)
 
-- `supabase/functions/reports-ai/index.ts` — recebe `{ prompt, period, level, comparison, snapshot }` e chama Lovable AI Gateway (`google/gemini-3-flash-preview`) com system prompt focado em saída estruturada (resumo executivo, variações, anomalias, oportunidades, riscos, recomendações). Trata 429/402. Sem streaming (resposta única, mais simples para o painel). Adicionar bloco em `supabase/config.toml` se necessário.
+Componente `src/components/dashboard/reports/CrossSellReport.tsx` com dois modos via `Tabs` interno:
 
-## Arquivos a editar
+**Modo A — Por produto**
+- Combobox (shadcn `Command`) para selecionar produto da base.
+- Calcular co-ocorrência: para cada pedido faturado contendo o produto X, contar SKUs co-presentes; agrupar por SKU e ordenar.
+- Exibir top 5 produtos comprados em conjunto: nome, categoria, nº de pedidos juntos, % de pedidos com X que também levam Y, receita total combinada.
+- Gráfico de barras horizontal (top 5) + tabela detalhada.
 
-- `src/components/dashboard/ReportsView.tsx` — reescrito como contêiner que recebe `orders/customers/products/filters` do `Index` e compõe os blocos acima. Aproveita `GlobalFilters` já existente no topo.
-- `src/pages/Index.tsx` — passa `customers`, `products`, `filters`, `setFilters` para `ReportsView` (hoje só passa `orders` simplificados). A entrada do menu “Relatórios” já existe na sidebar.
-- `src/types/dashboard.ts` — adicionar tipos auxiliares: `ComparisonPreset`, `CustomerCluster`, `InactivityBucket`, `StaleProductBucket`, `ReportSnapshot` (payload enviado à IA).
+**Modo B — Por cliente**
+- Combobox de cliente.
+- Pegar SKUs já comprados pelo cliente; para cada um, montar lista de co-ocorrência global; somar score (frequência ponderada × receita); excluir SKUs já comprados; retornar top 5.
+- Para cada recomendação mostrar: produto, "porque está sendo recomendado" (ex.: "vendido junto com Whey 900g em 47 pedidos"), preço médio, categoria.
+- Botão "Copiar lista" / "Exportar CSV".
 
-## Regras de negócio aplicadas
+**Lógica adicionada em `useReportsAnalytics.ts`**:
+- Construir `coOccurrenceMap: Map<sku, Map<sku, { count, revenue }>>` uma única vez (memoizado) iterando `validOrders` e seus `_items`.
+- Construir `productIndex: Map<sku, { name, category, avg_price }>` a partir de `products`.
+- Expor helpers `getRelatedBySku(sku, n=5)` e `getRecommendationsForCustomer(customerId, n=5)`.
 
-- **Vendas válidas**: somente `situacao = 'faturado'`, ignora `cancelled` e `data_pedido` futura (regra já existente em `useDashboardData`).
-- **Cliente ativo**: última compra histórica < 30 dias (não restrito ao filtro), conforme memória do projeto.
-- **Itens por pedido**: contar linhas distintas (`items.length`), não somar `qty` (granéis).
-- **Categoria/forma de pagamento**: usar `resolveProductCategory` e `normalizePaymentMethod` já implementados; ignorar “Não informado” em rankings de pagamento.
-- **Comparações**: período anterior calculado pelo mesmo tamanho de janela; YoY = mesma janela ano anterior.
-- **Cancelamentos**: relatório dedicado usa pedidos com status `cancelled`, fora das demais métricas.
+### 5. Melhorias em Clusters de Clientes
 
-## Definições dos blocos analíticos
+- Substituir grid atual por **cards expansíveis** (`Collapsible` shadcn). Header mostra nome + count + ticket médio + barra de % do total.
+- Ao expandir: 2 colunas — esquerda lista de clientes do cluster (paginada, com link para detalhe); direita lista dos top 10 produtos do cluster (com qty e receita).
+- Manter o scatter, porém com cores por cluster usando paleta semântica e legenda clicável.
+- Adicionar `ReportInfo` explicando regras de cada cluster.
 
-### 1. Comparativo principal
+### 6. Melhorias em "Maiores mudanças de comportamento"
 
-KPIs com Δ absoluto e %. Clientes recorrentes = têm ≥ 2 compras no histórico e compraram no período. Novos = primeira compra dentro do período. Inativos = sem compra há > 60 dias na data fim do período.
+- Em `CustomerTrendsReport` enriquecer cada linha com: nome, ticket antes/depois, frequência antes/depois, **classificação** ("Acelerando", "Desacelerando", "Subindo ticket", "Em risco"), última compra, ação sugerida.
+- Adicionar mini sparkline de receita por cliente (últimas 8 semanas).
+- Filtros locais: tipo de mudança (chips) e ordenação (delta freq, delta ticket, valor absoluto).
+- Top 20 em vez de 8.
 
-### 2. Clientes inativos
+### 7. Tooltip "Como é calculado" — textos por relatório
 
-Buckets 15/30/45/60/90+ dias. Ranking ordenado por “valor potencial perdido” = ticket médio histórico × frequência média estimada no período de inatividade. Filtros: faixa de inatividade, segmento de valor (quartis), categoria mais comprada, forma de pagamento mais usada.
+- **Executivo**: "KPIs sobre pedidos faturados no período X comparados a Y. Receita = soma de net_revenue. Ticket = receita / pedidos."
+- **Pareto**: "% acumulado de receita atribuída ao top N de clientes/produtos faturados."
+- **Inativos**: "Clientes com última compra ≥ 15 dias. Potencial perdido = ticket médio × frequência anual × (dias inativo / 365)."
+- **Clusters**: "Segmentação por regras: frequência (dias entre compras) × valor (acima/abaixo da mediana)."
+- **Recompra**: "% de clientes com 2+ pedidos. Tempo até 2ª compra é a média entre 1º e 2º pedido."
+- **Estagnados**: "Produtos sem venda nos últimos N dias. Crítico ≥ 60, Alerta ≥ 30, Atenção ≥ 7."
+- **Cesta por categoria / Âncoras**: "Co-ocorrência de itens em pedidos faturados."
+- **Sazonalidade**: "Distribuição de pedidos por dia da semana × janela de 3h."
+- **Tendências**: "Compara primeira metade vs segunda metade do período por cliente."
+- **Cross-sell**: "Produtos comprados no mesmo pedido que o item selecionado, agregados em todo o histórico faturado."
 
-### 3. Produtos sem vendas
+### Detalhes técnicos
 
-Para cada SKU vendido alguma vez: dias desde última venda; semáforo verde (<7), amarelo (7-30), laranja (30-60), vermelho (>60). Inclui receita histórica e quantidade no período anterior comparável. Filtros por categoria, marca, canal, faixa de valor.
-
-### 4. Clusters
-
-Regras determinísticas (sem ML) baseadas em frequência média e valor:
-
-- ≥1×/semana, semanal, mensal, one-shot, alto valor + baixa frequência, baixo valor + alta frequência, inativos com histórico forte.
-Para cada cluster: nº clientes, ticket médio, valor total, frequência média, intervalo médio, top categorias, forma pagamento mais usada, produto mais recorrente. Gráfico de dispersão Frequência × Valor (recharts ScatterChart).
-
-### 5. Tendências
-
-Série temporal (semanal/mensal) de frequência média, ticket médio, mix por categoria. Heatmap dia da semana × hora. Ranking de “mudança de comportamento”: clientes com maior variação Δ frequência ou Δ ticket entre dois subperíodos da janela.
-
-### 6. IA personalizada
-
-Form: Textarea de prompt, presets de período (atual filtro / 7d / 30d / custom), nível (geral, clientes, produtos, pedidos, mix, tendência), comparação (período anterior / YoY / custom). Envia para `reports-ai` snapshot resumido (KPIs + top N por categoria/cliente/produto + buckets de inatividade) — nunca dados crus completos. Renderiza Markdown + tabela de evidências quando o modelo retornar bloco `evidence` em JSON.
-
-### Relatórios complementares
-
-- **Recompra**: taxa, tempo médio entre 1ª e 2ª compra, ticket de recompra, retenção por coorte mensal até M+12.
-- **Concentração**: curva de Pareto clientes/produtos, % top10, distribuição por categoria.
-- **Cesta por categoria**: ticket médio quando categoria está presente, coocorrência (heatmap), categorias âncora vs complementares.
-- **Sazonalidade**: heatmap dia da semana × hora (buckets 3h), padrão por dia do mês.
-- **Âncora & complementares**: produtos que mais aparecem em pedidos de alto ticket + pares mais frequentes.
-
-## Notas técnicas
-
-- Reutilizar `recharts` (já no projeto) para line/bar/scatter/heatmap (heatmap via grid Tailwind + escala de cor).
-- Toda agregação no client (dados já vêm do cache local) via `useMemo` no novo `useReportsAnalytics`.
-- Loading states com `Skeleton`.
-- Exportação CSV reaproveita helper já existente em `OrdersTable.tsx` (extrair para `src/lib/csv.ts` se necessário).
-- Sem alterações de schema do banco.
+- **Arquivos novos**:
+  - `src/components/dashboard/reports/CrossSellReport.tsx`
+  - `src/components/dashboard/reports/shared/ReportInfo.tsx`
+  - `src/lib/chartColors.ts`
+- **Arquivos editados**:
+  - `src/components/dashboard/ReportsView.tsx` — nova estrutura em abas, remoção de Cancelamentos/Canal.
+  - `src/hooks/useReportsAnalytics.ts` — remover `cancellations`/`channelRecurrence`; adicionar `coOccurrenceMap`, `productIndex`, helpers `getRelatedBySku`/`getRecommendationsForCustomer`; enriquecer `behaviorChange` (ticket antes/depois, freq antes/depois, classificação, sparkline).
+  - `src/components/dashboard/reports/CustomerClustersReport.tsx` — cards colapsáveis com listas de clientes e produtos.
+  - `src/components/dashboard/reports/CustomerTrendsReport.tsx` — tabela enriquecida + filtros + sparkline.
+  - Todos os componentes `reports/*.tsx` — adicionar `<ReportInfo />` no header e aplicar paleta de `chartColors.ts`.
+- **Arquivos a deletar**: `CancellationsReport.tsx`, `ChannelRecurrenceReport.tsx`.
+- **Performance**: o cross-sell map é O(itens²) por pedido; aceitável até ~50k pedidos. Memoizar por hash de orders length + último `fetched_at`.
+- **Sem mudanças no banco** — tudo client-side a partir de `_items` já presentes em `tiny_order_details_cache`.

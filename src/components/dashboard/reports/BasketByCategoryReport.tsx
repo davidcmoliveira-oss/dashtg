@@ -1,4 +1,5 @@
 import { BasketStats } from "@/hooks/useReportsAnalytics";
+import { ReportHeader } from "./shared/ReportInfo";
 
 interface Props { data: BasketStats; }
 
@@ -7,10 +8,16 @@ const fmtBRL = (n: number) => `R$ ${(n || 0).toLocaleString("pt-BR", { minimumFr
 export const BasketByCategoryReport = ({ data }: Props) => {
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Cesta média por categoria</h2>
-        <p className="text-sm text-muted-foreground">Categorias âncora e oportunidades de cross-sell</p>
-      </div>
+      <ReportHeader
+        title="Cesta média por categoria"
+        subtitle="Categorias âncora e oportunidades de cross-sell"
+        info={
+          <>
+            <p>Para cada categoria presente em pedidos faturados: ticket médio e itens médios desses pedidos, e número de aparições.</p>
+            <p>"Pares de categorias" = co-ocorrência: quantos pedidos tinham as duas categorias juntas.</p>
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>

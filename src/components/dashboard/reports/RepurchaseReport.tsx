@@ -1,4 +1,5 @@
 import { RepurchaseStats } from "@/hooks/useReportsAnalytics";
+import { ReportHeader } from "./shared/ReportInfo";
 
 interface Props { data: RepurchaseStats; }
 
@@ -7,10 +8,17 @@ const fmtBRL = (n: number) => `R$ ${(n || 0).toLocaleString("pt-BR", { minimumFr
 export const RepurchaseReport = ({ data }: Props) => {
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Recompra</h2>
-        <p className="text-sm text-muted-foreground">Quem volta a comprar, em quanto tempo e com que valor</p>
-      </div>
+      <ReportHeader
+        title="Recompra"
+        subtitle="Quem volta a comprar, em quanto tempo e com que valor"
+        info={
+          <>
+            <p><strong>Taxa de recompra</strong> = clientes com 2+ pedidos faturados ÷ total de clientes.</p>
+            <p><strong>Tempo até 2ª compra</strong> = média da diferença em dias entre o 1º e o 2º pedido.</p>
+            <p><strong>Coorte</strong>: agrupa clientes pelo mês da 1ª compra; M+N = % desses clientes que voltaram a comprar no mês N seguinte.</p>
+          </>
+        }
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-border p-3">

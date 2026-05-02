@@ -1,4 +1,5 @@
 import { AnchorStats } from "@/hooks/useReportsAnalytics";
+import { ReportHeader } from "./shared/ReportInfo";
 
 interface Props { data: AnchorStats; }
 
@@ -7,10 +8,16 @@ const fmtBRL = (n: number) => `R$ ${(n || 0).toLocaleString("pt-BR", { minimumFr
 export const AnchorProductsReport = ({ data }: Props) => {
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Produtos âncora e complementares</h2>
-        <p className="text-sm text-muted-foreground">Produtos que puxam ticket alto e pares mais frequentes</p>
-      </div>
+      <ReportHeader
+        title="Produtos âncora e complementares"
+        subtitle="Produtos que puxam ticket alto e pares mais frequentes"
+        info={
+          <>
+            <p><strong>Âncoras</strong>: produtos mais presentes em pedidos do <em>quartil superior</em> de ticket (top 25%).</p>
+            <p><strong>Pares</strong>: combinações de SKUs que mais aparecem juntas em pedidos faturados — ideias de kits.</p>
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>

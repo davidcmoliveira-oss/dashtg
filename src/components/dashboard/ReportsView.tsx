@@ -12,9 +12,9 @@ import { RevenueConcentrationReport } from "./reports/RevenueConcentrationReport
 import { BasketByCategoryReport } from "./reports/BasketByCategoryReport";
 import { SeasonalityReport } from "./reports/SeasonalityReport";
 import { AnchorProductsReport } from "./reports/AnchorProductsReport";
-import { CancellationsReport } from "./reports/CancellationsReport";
-import { ChannelRecurrenceReport } from "./reports/ChannelRecurrenceReport";
+import { CrossSellReport } from "./reports/CrossSellReport";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Sparkles, BarChart3, Users, Package, Activity, Brain } from "lucide-react";
 
 interface ReportsViewProps {
   orders: TinyOrder[];
@@ -70,7 +70,6 @@ export const ReportsView = ({ orders, customers, products, isLoading }: ReportsV
       top10_products_pct: analytics.pareto.top10_products_pct,
       top_categories: analytics.pareto.by_category.slice(0, 5),
     },
-    cancellations: { count: analytics.cancellations.count, value: analytics.cancellations.value },
     behavior_change_top: analytics.behaviorChange.slice(0, 8),
   }), [analytics]);
 
@@ -88,53 +87,78 @@ export const ReportsView = ({ orders, customers, products, isLoading }: ReportsV
     <div className="space-y-6 animate-slide-up">
       <div>
         <h1 className="text-2xl font-bold">Relatórios</h1>
-        <p className="text-muted-foreground">Painel executivo de decisão</p>
+        <p className="text-muted-foreground">
+          Painel executivo de decisão — {analytics.executive.range.label} vs {analytics.executive.range.prevLabel}
+        </p>
       </div>
 
-      <ReportsExecutivePanel
-        block={analytics.executive}
-        preset={preset}
-        onPresetChange={setPreset}
-      />
+      <Tabs defaultValue="cross-sell" className="space-y-4">
+        <TabsList className="flex-wrap h-auto gap-1 bg-muted/40 p-1">
+          <TabsTrigger value="executive" className="gap-1.5">
+            <BarChart3 className="h-4 w-4" /> Visão Executiva
+          </TabsTrigger>
+          <TabsTrigger value="cross-sell" className="gap-1.5">
+            <Sparkles className="h-4 w-4 text-primary" /> Cross-sell
+          </TabsTrigger>
+          <TabsTrigger value="customers" className="gap-1.5">
+            <Users className="h-4 w-4" /> Clientes
+          </TabsTrigger>
+          <TabsTrigger value="products" className="gap-1.5">
+            <Package className="h-4 w-4" /> Produtos
+          </TabsTrigger>
+          <TabsTrigger value="behavior" className="gap-1.5">
+            <Activity className="h-4 w-4" /> Comportamento
+          </TabsTrigger>
+          <TabsTrigger value="ai" className="gap-1.5">
+            <Brain className="h-4 w-4" /> IA
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <InactiveCustomersReport
-          buckets={analytics.inactiveBuckets}
-          customers={analytics.inactiveList}
-        />
-        <StaleProductsReport products={analytics.staleProducts} />
-      </div>
+        <TabsContent value="executive" className="space-y-6 mt-4">
+          <ReportsExecutivePanel
+            block={analytics.executive}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+          <RevenueConcentrationReport data={analytics.pareto} />
+        </TabsContent>
 
-      <CustomerClustersReport clusters={analytics.clusters} />
+        <TabsContent value="cross-sell" className="mt-4">
+          <CrossSellReport
+            productList={analytics.productList}
+            customers={customers}
+            getRelatedBySku={analytics.getRelatedBySku}
+            getRecommendationsForCustomer={analytics.getRecommendationsForCustomer}
+          />
+        </TabsContent>
 
-      <CustomerTrendsReport
-        trendSeries={analytics.trendSeries}
-        behaviorChange={analytics.behaviorChange}
-      />
+        <TabsContent value="customers" className="space-y-6 mt-4">
+          <InactiveCustomersReport
+            buckets={analytics.inactiveBuckets}
+            customers={analytics.inactiveList}
+          />
+          <CustomerClustersReport clusters={analytics.clusters} />
+          <RepurchaseReport data={analytics.repurchase} />
+        </TabsContent>
 
-      <AiCustomReport snapshot={aiSnapshot} />
+        <TabsContent value="products" className="space-y-6 mt-4">
+          <StaleProductsReport products={analytics.staleProducts} />
+          <AnchorProductsReport data={analytics.anchor} />
+          <BasketByCategoryReport data={analytics.basket} />
+        </TabsContent>
 
-      <div>
-        <h2 className="text-xl font-bold mb-3">Relatórios complementares</h2>
-        <Tabs defaultValue="repurchase">
-          <TabsList className="flex-wrap h-auto">
-            <TabsTrigger value="repurchase">Recompra</TabsTrigger>
-            <TabsTrigger value="concentration">Concentração</TabsTrigger>
-            <TabsTrigger value="basket">Cesta por categoria</TabsTrigger>
-            <TabsTrigger value="channel">Canal × recorrência</TabsTrigger>
-            <TabsTrigger value="seasonality">Sazonalidade</TabsTrigger>
-            <TabsTrigger value="anchor">Âncoras / kits</TabsTrigger>
-            <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
-          </TabsList>
-          <TabsContent value="repurchase" className="mt-4"><RepurchaseReport data={analytics.repurchase} /></TabsContent>
-          <TabsContent value="concentration" className="mt-4"><RevenueConcentrationReport data={analytics.pareto} /></TabsContent>
-          <TabsContent value="basket" className="mt-4"><BasketByCategoryReport data={analytics.basket} /></TabsContent>
-          <TabsContent value="channel" className="mt-4"><ChannelRecurrenceReport data={analytics.channelRecurrence} /></TabsContent>
-          <TabsContent value="seasonality" className="mt-4"><SeasonalityReport data={analytics.seasonality} /></TabsContent>
-          <TabsContent value="anchor" className="mt-4"><AnchorProductsReport data={analytics.anchor} /></TabsContent>
-          <TabsContent value="cancellations" className="mt-4"><CancellationsReport data={analytics.cancellations} /></TabsContent>
-        </Tabs>
-      </div>
+        <TabsContent value="behavior" className="space-y-6 mt-4">
+          <CustomerTrendsReport
+            trendSeries={analytics.trendSeries}
+            behaviorChange={analytics.behaviorChange}
+          />
+          <SeasonalityReport data={analytics.seasonality} />
+        </TabsContent>
+
+        <TabsContent value="ai" className="mt-4">
+          <AiCustomReport snapshot={aiSnapshot} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
