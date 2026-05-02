@@ -277,20 +277,47 @@ export interface AnchorStats {
   pairs: Array<{ a: string; b: string; count: number }>;
 }
 
-export interface CancellationStats {
-  count: number;
-  value: number;
-  by_day: Array<{ date: string; count: number; value: number }>;
-  recent: Array<{ id: string; date: string; value: number; customer: string }>;
+export type BehaviorClassification =
+  | "acelerando"
+  | "desacelerando"
+  | "subindo_ticket"
+  | "caindo_ticket"
+  | "em_risco"
+  | "estavel";
+
+export interface BehaviorChangeRow {
+  customer_id: string;
+  name: string;
+  deltaFreq: number;
+  deltaTicket: number;
+  freqBefore: number;
+  freqAfter: number;
+  ticketBefore: number;
+  ticketAfter: number;
+  classification: BehaviorClassification;
+  last_order_date: string;
+  spark: number[];
 }
 
-export interface ChannelRecurrenceStats {
-  by_channel: Array<{
-    channel: string;
-    customers: number;
-    repurchase_rate: number;
-    avg_orders: number;
-  }>;
+export interface CrossSellRelated {
+  sku: string;
+  product_name: string;
+  category: string;
+  count: number;
+  pct_of_anchor: number;
+  combined_revenue: number;
+  avg_price: number;
+}
+
+export interface CustomerRecommendation extends CrossSellRelated {
+  reason: string;
+}
+
+export interface ProductIndexEntry {
+  sku: string;
+  name: string;
+  category: string;
+  avg_price: number;
 }
 
 export interface ReportsAnalytics {
@@ -300,14 +327,16 @@ export interface ReportsAnalytics {
   staleProducts: StaleProduct[];
   clusters: CustomerCluster[];
   trendSeries: Array<{ bucket: string; orders: number; revenue: number; avgTicket: number }>;
-  behaviorChange: Array<{ name: string; deltaFreq: number; deltaTicket: number }>;
+  behaviorChange: BehaviorChangeRow[];
   repurchase: RepurchaseStats;
   pareto: ParetoStats;
   basket: BasketStats;
   seasonality: SeasonalityStats;
   anchor: AnchorStats;
-  cancellations: CancellationStats;
-  channelRecurrence: ChannelRecurrenceStats;
+  productIndex: Map<string, ProductIndexEntry>;
+  productList: ProductIndexEntry[];
+  getRelatedBySku: (sku: string, n?: number) => CrossSellRelated[];
+  getRecommendationsForCustomer: (customerId: string, n?: number) => CustomerRecommendation[];
 }
 
 export const useReportsAnalytics = (
