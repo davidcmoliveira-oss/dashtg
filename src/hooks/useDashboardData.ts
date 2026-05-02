@@ -388,7 +388,13 @@ export const useDashboardData = () => {
       if (orderDate < startDate || orderDate > endDate) return false;
       if (filters.salesChannel.length > 0 && !filters.salesChannel.includes(order.sales_channel)) return false;
       if (filters.paymentMethod.length > 0 && !filters.paymentMethod.includes(order.payment_method)) return false;
-      if (filters.productCategory.length > 0 && !filters.productCategory.includes(order.product_category)) return false;
+      if (filters.productCategory.length > 0) {
+        const itemCategories = ((order as any)._items || []).map((item: any) => item.categoria).filter(Boolean);
+        const matchesCategory = filters.productCategory.some(cat =>
+          order.product_category === cat || itemCategories.includes(cat)
+        );
+        if (!matchesCategory) return false;
+      }
       if (filters.customerId && order.customer_id !== filters.customerId) return false;
 
       if (order.order_time && filters.timeRange) {
@@ -424,7 +430,7 @@ export const useDashboardData = () => {
   const customers: CustomerData[] = useMemo(() => {
     // Para "cliente ativo" usar a ÚLTIMA compra real do cliente (dataset completo, sem filtro de data)
     const lastOrderDateByCustomer = new Map<string, string>();
-    orders.forEach(o => {
+    orders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(o => {
       const cur = lastOrderDateByCustomer.get(o.customer_id);
       if (!cur || parseBrazilianDate(o.order_date) > parseBrazilianDate(cur)) {
         lastOrderDateByCustomer.set(o.customer_id, o.order_date);
@@ -437,7 +443,7 @@ export const useDashboardData = () => {
       paymentMethods: Map<string, number>;
     }>();
 
-    filteredOrders.forEach(order => {
+    filteredOrders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(order => {
       const existing = customerMap.get(order.customer_id);
       if (existing) {
         existing.orders.push(order);
