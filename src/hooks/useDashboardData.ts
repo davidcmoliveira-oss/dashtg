@@ -10,6 +10,7 @@ import {
   normalizeStatus,
   normalizePaymentMethod,
   isValidPaymentMethod,
+  resolveProductCategory,
   calculateDaysSinceLastPurchase,
   isActiveCustomer,
   calculateCLTV3Y,
@@ -71,6 +72,7 @@ interface ProductCacheEntry {
   sku: string;
   nome: string | null;
   categoria: string | null;
+  unidade?: string | null;
 }
 
 export const useDashboardData = () => {
@@ -172,7 +174,7 @@ export const useDashboardData = () => {
         const pTo = pFrom + PAGE_SIZE - 1;
         const { data: pChunk, error: pErr } = await supabase
           .from('tiny_products_cache')
-          .select('sku, nome, categoria')
+          .select('sku, nome, categoria, unidade')
           .range(pFrom, pTo);
         if (pErr) { console.error('Products cache error:', pErr.message); break; }
         if (!pChunk || pChunk.length === 0) break;
@@ -264,13 +266,16 @@ export const useDashboardData = () => {
         const items = rawItems.map((it: any) => {
           const skuKey = String(it.sku || '').trim();
           const cached = skuKey ? productCache.get(skuKey) : undefined;
+          const productName = cached?.nome || it.product_name || it.descricao || skuKey || '';
+          const unit = cached?.unidade || it.unidade || it.unit || '';
           return {
             sku: skuKey,
-            product_name: cached?.nome || it.product_name || it.descricao || skuKey || '',
-            categoria: cached?.categoria || it.categoria || it.category || '',
+            product_name: productName,
+            categoria: resolveProductCategory(cached?.categoria || it.categoria || it.category, productName, skuKey, unit),
             qty: Number(it.qty) || 1,
             unit_price: Number(it.unit_price) || 0,
             total: Number(it.total) || 0,
+            unidade: unit,
           };
         });
         if (items.length > 0) {
