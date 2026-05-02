@@ -645,6 +645,7 @@ function updateProductMap(
   map: Map<string, any>,
   key: string,
   name: string,
+  category: string,
   qty: number,
   revenue: number,
   customerId: string,
@@ -669,7 +670,7 @@ function updateProductMap(
     weekdaySales[orderDate.getDay()] = 1;
     monthdaySales[orderDate.getDate() - 1] = 1;
     map.set(key, {
-      name, qty, revenue, orders: 1,
+      name, category, qty, revenue, orders: 1,
       lastSale: orderDateStr,
       customers: new Set([customerId]),
       weekdaySales, monthdaySales,
