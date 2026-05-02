@@ -10,6 +10,7 @@ import { CustomersListView } from "@/components/dashboard/CustomersListView";
 import { CustomerDetailView } from "@/components/dashboard/CustomerDetailView";
 import { ProductsView } from "@/components/dashboard/ProductsView";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
+import { ReportsView } from "@/components/dashboard/ReportsView";
 import { AiInsightsPanel } from "@/components/dashboard/AiInsightsPanel";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
@@ -182,6 +183,18 @@ const Index = () => {
             <div className="mt-6">
               <AiInsightsPanel defaultPrompt={productsAiPrompt} contextData={productsAiContext} />
             </div>
+          </div>
+        );
+
+      case "reports":
+        return (
+          <div className="animate-slide-up">
+            <ReportsView
+              orders={orders}
+              customers={customers}
+              products={products}
+              isLoading={isLoading}
+            />
           </div>
         );
 

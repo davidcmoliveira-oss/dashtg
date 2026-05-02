@@ -7,7 +7,7 @@ import { RecentOrders } from "@/components/dashboard/RecentOrders";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
 import { SalesView } from "@/components/dashboard/SalesView";
 import { CustomersView } from "@/components/dashboard/CustomersView";
-import { ReportsView } from "@/components/dashboard/ReportsView";
+
 import { AnalyticsView } from "@/components/dashboard/AnalyticsView";
 import { useTinyOrders } from "@/hooks/useTinyOrders";
 import { useToast } from "@/hooks/use-toast";
@@ -111,7 +111,7 @@ const IndexBackup = () => {
         return <CustomersView orders={orders} isLoading={isLoading} />;
       
       case "reports":
-        return <ReportsView orders={orders} isLoading={isLoading} />;
+        return <div className="text-muted-foreground">Acesse a versão atual do app para usar Relatórios.</div>;
       
       case "analytics":
         return <AnalyticsView orders={orders} isLoading={isLoading} />;
