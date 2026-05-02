@@ -319,6 +319,9 @@ export const CustomersListView = ({ customers, orders, allOrders, isLoading, onC
       {/* AI Insights */}
       <AiInsightsPanel defaultPrompt={aiDefaultPrompt} contextData={aiContextData} />
 
+      {/* Clientes Novos vs Recorrentes */}
+      <NewVsReturningChart orders={orders} allOrders={allOrders} />
+
       {/* Charts (same as customer detail) */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Time Series */}
