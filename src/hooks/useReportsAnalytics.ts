@@ -606,21 +606,48 @@ export const useReportsAnalytics = (
     };
     const h1 = halfStats(range.start, mid);
     const h2 = halfStats(mid, range.end);
-    const behaviorChange: ReportsAnalytics["behaviorChange"] = [];
+    const behaviorChange: BehaviorChangeRow[] = [];
     const allCust = new Set([...h1.keys(), ...h2.keys()]);
+    const weeks = 8;
+    const sparkMap = new Map<string, number[]>();
+    validOrders.forEach((o) => {
+      const d = parseBR(o.order_date);
+      if (isNaN(d.getTime())) return;
+      const diff = (range.end.getTime() - d.getTime()) / 86400000;
+      if (diff < 0 || diff > weeks * 7) return;
+      const idx = weeks - 1 - Math.min(weeks - 1, Math.floor(diff / 7));
+      if (!sparkMap.has(o.customer_id)) sparkMap.set(o.customer_id, Array(weeks).fill(0));
+      sparkMap.get(o.customer_id)![idx] += o.net_revenue || o.total_paid || 0;
+    });
     allCust.forEach((cid) => {
       const a = h1.get(cid) || { freq: 0, ticket: 0, orders: 0 };
       const b = h2.get(cid) || { freq: 0, ticket: 0, orders: 0 };
       const ta = a.orders ? a.ticket / a.orders : 0;
       const tb = b.orders ? b.ticket / b.orders : 0;
       const customer = customers.find((c) => c.customer_id === cid);
+      const deltaFreq = b.freq - a.freq;
+      const deltaTicket = tb - ta;
+      let classification: BehaviorClassification = "estavel";
+      if (b.freq === 0 && a.freq > 0) classification = "em_risco";
+      else if (deltaFreq >= 2) classification = "acelerando";
+      else if (deltaFreq <= -2) classification = "desacelerando";
+      else if (ta > 0 && (tb - ta) / ta >= 0.2) classification = "subindo_ticket";
+      else if (ta > 0 && (tb - ta) / ta <= -0.2) classification = "caindo_ticket";
       behaviorChange.push({
+        customer_id: cid,
         name: customer?.customer_name || cid,
-        deltaFreq: b.freq - a.freq,
-        deltaTicket: tb - ta,
+        deltaFreq,
+        deltaTicket,
+        freqBefore: a.freq,
+        freqAfter: b.freq,
+        ticketBefore: ta,
+        ticketAfter: tb,
+        classification,
+        last_order_date: customer?.last_order_date || "",
+        spark: sparkMap.get(cid) || Array(weeks).fill(0),
       });
     });
-    behaviorChange.sort((x, y) => Math.abs(y.deltaFreq) + Math.abs(y.deltaTicket) - Math.abs(x.deltaFreq) - Math.abs(x.deltaTicket));
+    behaviorChange.sort((x, y) => (Math.abs(y.deltaFreq) * 100 + Math.abs(y.deltaTicket)) - (Math.abs(x.deltaFreq) * 100 + Math.abs(x.deltaTicket)));
 
     // Repurchase
     let withSecond = 0;
