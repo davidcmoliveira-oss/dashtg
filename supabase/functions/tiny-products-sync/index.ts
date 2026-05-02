@@ -92,7 +92,7 @@ serve(async (req) => {
               sku: String(p.codigo || '').trim(),
               tiny_product_id: p.id ? parseInt(p.id) : null,
               nome: p.nome || null,
-              categoria: null as string | null,
+              categoria: resolveCategory(null, p.nome, p.codigo, p.unidade),
               marca: p.marca || null,
               unidade: p.unidade || null,
               preco: parseFloat(p.preco) || 0,
@@ -141,16 +141,12 @@ serve(async (req) => {
             continue;
           }
           const p = det.retorno?.produto;
-          if (p && p.categoria) {
+          if (p) {
+            const categoria = resolveCategory(p.categoria, p.nome, (row as any).sku, p.unidade);
             await db.from('tiny_products_cache')
-              .update({ categoria: p.categoria, marca: p.marca || null, raw_json: p, fetched_at: new Date().toISOString() })
+              .update({ categoria, marca: p.marca || null, raw_json: p, fetched_at: new Date().toISOString() })
               .eq('sku', (row as any).sku);
             enriched++;
-          } else if (p) {
-            // marca como buscado para não retornar (categoria vazia mesmo)
-            await db.from('tiny_products_cache')
-              .update({ categoria: 'Sem categoria', raw_json: p, fetched_at: new Date().toISOString() })
-              .eq('sku', (row as any).sku);
           }
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -209,7 +205,7 @@ serve(async (req) => {
           const erros = search.retorno.erros?.map((e: any) => e.erro).join(', ') || '';
           if (isRateLimitError(erros)) { rateLimited = true; break; }
           rows.push({
-            sku, nome: null, categoria: null, marca: null, unidade: null, preco: 0,
+            sku, nome: null, categoria: resolveCategory(null, sku, sku), marca: null, unidade: null, preco: 0,
             raw_json: { not_found: true, stage: 'search', error: erros },
             fetched_at: new Date().toISOString(),
           });
@@ -224,7 +220,7 @@ serve(async (req) => {
         const found = match?.produto || match;
         if (!found?.id) {
           rows.push({
-            sku, nome: null, categoria: null, marca: null, unidade: null, preco: 0,
+            sku, nome: null, categoria: resolveCategory(null, sku, sku), marca: null, unidade: null, preco: 0,
             raw_json: { not_found: true, stage: 'search', error: 'no match' },
             fetched_at: new Date().toISOString(),
           });
@@ -244,7 +240,7 @@ serve(async (req) => {
             sku,
             tiny_product_id: parseInt(found.id),
             nome: found.nome || null,
-            categoria: null,
+            categoria: resolveCategory(null, found.nome, sku, found.unidade),
             marca: found.marca || null,
             unidade: found.unidade || null,
             preco: parseFloat(found.preco) || 0,
@@ -260,7 +256,7 @@ serve(async (req) => {
             sku,
             tiny_product_id: p.id ? parseInt(p.id) : parseInt(found.id),
             nome: p.nome || found.nome || null,
-            categoria: p.categoria || null,
+            categoria: resolveCategory(p.categoria, p.nome || found.nome, sku, p.unidade || found.unidade),
             marca: p.marca || found.marca || null,
             unidade: p.unidade || found.unidade || null,
             preco: parseFloat(p.preco) || parseFloat(found.preco) || 0,
