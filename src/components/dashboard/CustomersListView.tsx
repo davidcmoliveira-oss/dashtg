@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerData, TinyOrder } from "@/types/dashboard";
 import { MetricTooltip } from "./MetricTooltip";
 import { AiInsightsPanel } from "./AiInsightsPanel";
+import { NewVsReturningChart } from "./NewVsReturningChart";
 import {
   Area,
   AreaChart,
@@ -32,11 +33,12 @@ const CHART_COLORS = [
 interface CustomersListViewProps {
   customers: CustomerData[];
   orders: TinyOrder[];
+  allOrders: TinyOrder[];
   isLoading: boolean;
   onCustomerClick: (customerId: string) => void;
 }
 
-export const CustomersListView = ({ customers, orders, isLoading, onCustomerClick }: CustomersListViewProps) => {
+export const CustomersListView = ({ customers, orders, allOrders, isLoading, onCustomerClick }: CustomersListViewProps) => {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState<'value' | 'orders' | 'items'>('value');
@@ -316,6 +318,9 @@ export const CustomersListView = ({ customers, orders, isLoading, onCustomerClic
 
       {/* AI Insights */}
       <AiInsightsPanel defaultPrompt={aiDefaultPrompt} contextData={aiContextData} />
+
+      {/* Clientes Novos vs Recorrentes */}
+      <NewVsReturningChart orders={orders} allOrders={allOrders} />
 
       {/* Charts (same as customer detail) */}
       <div className="grid gap-6 lg:grid-cols-2">
