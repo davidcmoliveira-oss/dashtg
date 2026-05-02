@@ -38,10 +38,17 @@ export const StaleProductsReport = ({ products }: Props) => {
 
   return (
     <section className="rounded-xl border border-border bg-card p-5 space-y-4">
-      <div>
-        <h2 className="text-lg font-bold">Produtos sem vendas</h2>
-        <p className="text-sm text-muted-foreground">Identifique giro fraco, sazonalidade ou estoque parado</p>
-      </div>
+      <ReportHeader
+        title="Produtos sem vendas"
+        subtitle="Identifique giro fraco, sazonalidade ou estoque parado"
+        info={
+          <>
+            <p>Considera <strong>days_without_sale</strong> de cada produto, calculado a partir da última venda faturada.</p>
+            <p>Níveis: <strong>Crítico</strong> ≥ 60 dias, <strong>Risco</strong> ≥ 30, <strong>Atenção</strong> ≥ 7, <strong>OK</strong> &lt; 7.</p>
+            <p>"Vend. período anterior" usa o intervalo comparativo selecionado no painel executivo.</p>
+          </>
+        }
+      />
 
       <div className="flex flex-wrap gap-2 items-center">
         {(["all", "7", "15", "30", "60", "90"] as const).map((f) => (
