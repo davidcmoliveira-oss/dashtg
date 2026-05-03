@@ -225,7 +225,18 @@ serve(async (req) => {
     console.log(`Fetched ${allOrders.length} orders from API`);
 
     // Step 2: Upsert orders to cache
+    let newOrderIds: number[] = [];
     if (allOrders.length > 0) {
+      // Detect which orders are new (not yet in cache) BEFORE upsert — for automation triggering
+      const incomingIds = allOrders.map((o: any) => Number(o.pedido.id));
+      const { data: existingOrders } = await db
+        .from('tiny_orders_cache')
+        .select('tiny_order_id')
+        .in('tiny_order_id', incomingIds);
+      const existingOrderSet = new Set((existingOrders || []).map((r: any) => Number(r.tiny_order_id)));
+      newOrderIds = incomingIds.filter((id) => !existingOrderSet.has(id));
+      console.log(`New orders detected for automation: ${newOrderIds.length}`);
+
       const rows = allOrders.map((o: any) => ({
         tiny_order_id: o.pedido.id,
         numero: o.pedido.numero,
