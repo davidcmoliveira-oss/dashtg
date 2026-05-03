@@ -12,6 +12,7 @@ import { ProductsView } from "@/components/dashboard/ProductsView";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
 import { ReportsView } from "@/components/dashboard/ReportsView";
 import { AiInsightsPanel } from "@/components/dashboard/AiInsightsPanel";
+import { AutomationsView } from "@/modules/automations/ui/AutomationsView";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
