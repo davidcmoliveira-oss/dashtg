@@ -201,6 +201,16 @@ const Index = () => {
           </div>
         );
 
+      case "automations":
+        return (
+          <div className="animate-slide-up">
+            <AutomationsView
+              productOptions={products.map(p => ({ sku: p.sku, nome: p.product_name, categoria: (p as any).categoria ?? "" }))}
+              categoryOptions={Array.from(new Set(products.map(p => (p as any).categoria).filter(Boolean))) as string[]}
+            />
+          </div>
+        );
+
       case "settings":
         return (
           <div className="max-w-2xl animate-slide-up">
