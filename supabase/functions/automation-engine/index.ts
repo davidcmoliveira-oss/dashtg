@@ -162,11 +162,9 @@ Deno.serve(async (req) => {
     const TINY_TOKEN = Deno.env.get("TINY_API_TOKEN");
     if (TINY_TOKEN && (cpfCnpj || customerName)) {
       try {
-        const searchBody = new URLSearchParams({
-          token: TINY_TOKEN,
-          formato: "json",
-          ...(cpfCnpj ? { pesquisa: cpfCnpj } : { pesquisa: customerName }),
-        });
+        const searchBody = new URLSearchParams({ token: TINY_TOKEN, formato: "json" });
+        if (cpfCnpj) searchBody.set("cpf_cnpj", cpfCnpj);
+        else searchBody.set("pesquisa", customerName);
         const sres = await fetch("https://api.tiny.com.br/api2/contatos.pesquisa.php", { method: "POST", body: searchBody });
         const sjson = await sres.json().catch(() => ({}));
         const contatos = sjson?.retorno?.contatos ?? [];
