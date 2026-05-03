@@ -40,10 +40,10 @@ function extractItems(detail: any): Array<{ sku: string; nome: string; categoria
     const item = it?.item ?? it;
     return {
       sku: String(item?.codigo ?? item?.sku ?? ""),
-      nome: String(item?.descricao ?? item?.nome ?? ""),
+      nome: String(item?.descricao ?? item?.nome ?? item?.product_name ?? ""),
       categoria: String(item?.categoria ?? ""),
-      quantidade: Number(item?.quantidade ?? 1),
-      valor: Number(item?.valor_unitario ?? item?.valor ?? 0),
+      quantidade: Number(item?.quantidade ?? item?.qty ?? 1),
+      valor: Number(item?.valor_unitario ?? item?.unit_price ?? item?.valor ?? item?.total ?? 0),
     };
   });
 }
