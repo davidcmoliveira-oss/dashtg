@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.tiny-sync]
 verify_jwt = false
+
+[functions.automation-engine]
+verify_jwt = false

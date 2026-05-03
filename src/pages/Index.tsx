@@ -12,6 +12,7 @@ import { ProductsView } from "@/components/dashboard/ProductsView";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
 import { ReportsView } from "@/components/dashboard/ReportsView";
 import { AiInsightsPanel } from "@/components/dashboard/AiInsightsPanel";
+import { AutomationsView } from "@/modules/automations/ui/AutomationsView";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -196,6 +197,16 @@ const Index = () => {
               customers={customers}
               products={products}
               isLoading={isLoading}
+            />
+          </div>
+        );
+
+      case "automations":
+        return (
+          <div className="animate-slide-up">
+            <AutomationsView
+              productOptions={products.map(p => ({ sku: p.sku, nome: p.product_name, categoria: (p as any).categoria ?? "" }))}
+              categoryOptions={Array.from(new Set(products.map(p => (p as any).categoria).filter(Boolean))) as string[]}
             />
           </div>
         );

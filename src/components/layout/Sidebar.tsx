@@ -5,7 +5,8 @@ import {
   Webhook, 
   Users,
   Package,
-  FileBarChart2
+  FileBarChart2,
+  Zap
 } from "lucide-react";
 
 interface SidebarProps {
@@ -18,6 +19,7 @@ const menuItems = [
   { id: "customers", label: "Clientes", icon: Users },
   { id: "products", label: "Produtos", icon: Package },
   { id: "reports", label: "Relatórios", icon: FileBarChart2 },
+  { id: "automations", label: "Automações", icon: Zap },
 ];
 
 const bottomItems = [
