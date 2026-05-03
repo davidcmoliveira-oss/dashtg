@@ -295,6 +295,16 @@ serve(async (req) => {
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
           if (error) console.error('Details cache write error:', error.message);
+        }
+
+        if (rl) {
+          console.log('Rate limited during details fetch, stopping');
+          rateLimited = true;
+          break;
+        }
+
+        if (i + 20 < idsToFetch.length) await delay(500);
+      }
     }
 
     // Step 4: Trigger automation engine for new orders (fire-and-forget per order)
@@ -314,16 +324,6 @@ serve(async (req) => {
           console.error(`automation-engine trigger failed for order ${orderId}:`, e);
         }
       }));
-    }
-
-        if (rl) {
-          console.log('Rate limited during details fetch, stopping');
-          rateLimited = true;
-          break;
-        }
-
-        if (i + 20 < idsToFetch.length) await delay(500);
-      }
     }
 
     const response = {
