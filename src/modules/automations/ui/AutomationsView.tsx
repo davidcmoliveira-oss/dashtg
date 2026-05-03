@@ -40,7 +40,7 @@ interface Props {
 
 export function AutomationsView({ productOptions, categoryOptions }: Props) {
   const { rules, isLoading, upsert, remove, duplicate, toggleActive, testWebhook } = useAutomations();
-  const { dispatches, isLoading: dispatchesLoading, reload: reloadDispatches, resend } = useDispatches();
+  const { dispatches, isLoading: dispatchesLoading, isSyncing, reload: reloadDispatches, resend, forceAutomationSync } = useDispatches();
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<(Partial<AutomationRule> & { id?: string }) | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
@@ -72,7 +72,12 @@ export function AutomationsView({ productOptions, categoryOptions }: Props) {
           <h1 className="text-2xl font-bold flex items-center gap-2"><Zap className="h-6 w-6 text-primary" /> Automações de Funis</h1>
           <p className="text-muted-foreground">Integração com BotConversa e webhooks externos baseada em regras.</p>
         </div>
-        <Button onClick={() => setEditing({ ...emptyRule })}><Plus className="h-4 w-4" /> Nova automação</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={forceAutomationSync} disabled={isSyncing}>
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} /> Forçar atualização
+          </Button>
+          <Button onClick={() => setEditing({ ...emptyRule })}><Plus className="h-4 w-4" /> Nova automação</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
