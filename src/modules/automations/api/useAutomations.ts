@@ -148,7 +148,7 @@ export function useDispatches(ruleId?: string) {
     setIsSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke("automation-sync", {
-        body: { force: true, source: "automation-screen", lookbackHours: 1 },
+        body: { force: true, refreshDetails: true, source: "automation-screen", lookbackHours: 1 },
       });
       if (error) throw new Error(error.message);
       if ((data as any)?.success === false) throw new Error((data as any)?.error ?? "Falha na atualização");
