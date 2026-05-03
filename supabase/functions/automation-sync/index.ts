@@ -89,6 +89,7 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const force = Boolean(body.force);
+    const ignoreDedup = Boolean(body.ignoreDedup);
     const maxPages = Math.min(Number(body.maxPages ?? 2) || 2, 4);
     const maxOrders = Math.min(Number(body.maxOrders ?? 80) || 80, 150);
     const lookbackHours = Math.max(Number(body.lookbackHours ?? 1) || 1, 1);
@@ -194,7 +195,7 @@ serve(async (req) => {
       const res = await fetch(engineUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-        body: JSON.stringify({ orderId, ignoreDedup: force }),
+        body: JSON.stringify({ orderId, ignoreDedup }),
       });
       const text = await res.text();
       engineResults.push({ orderId, status: res.status, body: text.slice(0, 1000) });
