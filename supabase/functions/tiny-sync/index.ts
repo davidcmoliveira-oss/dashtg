@@ -295,7 +295,26 @@ serve(async (req) => {
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
           if (error) console.error('Details cache write error:', error.message);
+    }
+
+    // Step 4: Trigger automation engine for new orders (fire-and-forget per order)
+    if (newOrderIds.length > 0) {
+      console.log(`Triggering automation-engine for ${newOrderIds.length} new orders`);
+      const engineUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine`;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      await Promise.all(newOrderIds.map(async (orderId) => {
+        try {
+          const r = await fetch(engineUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({ orderId }),
+          });
+          await r.text();
+        } catch (e) {
+          console.error(`automation-engine trigger failed for order ${orderId}:`, e);
         }
+      }));
+    }
 
         if (rl) {
           console.log('Rate limited during details fetch, stopping');
