@@ -120,6 +120,7 @@ export interface Dispatch {
 export function useDispatches(ruleId?: string) {
   const [dispatches, setDispatches] = useState<Dispatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -143,5 +144,27 @@ export function useDispatches(ruleId?: string) {
     await load();
   };
 
-  return { dispatches, isLoading, reload: load, resend };
+  const forceAutomationSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("automation-sync", {
+        body: { force: true, source: "automation-screen", lookbackHours: 1 },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.success === false) throw new Error((data as any)?.error ?? "Falha na atualização");
+      toast.success("Automação atualizada", {
+        description: `${(data as any)?.processed ?? 0} pedido(s) processado(s) nesta consulta.`,
+      });
+      await load();
+      return data;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao atualizar automações";
+      toast.error("Falha ao atualizar automações", { description: message });
+      return null;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return { dispatches, isLoading, isSyncing, reload: load, resend, forceAutomationSync };
 }
