@@ -14,6 +14,134 @@ export type Database = {
   }
   public: {
     Tables: {
+      automation_dispatches: {
+        Row: {
+          attempts: number
+          customer_name: string | null
+          customer_phone: string | null
+          dispatched_at: string
+          error_message: string | null
+          id: string
+          is_test: boolean
+          matched_category: string | null
+          matched_product: string | null
+          payload: Json
+          response_body: string | null
+          response_status: number | null
+          rule_id: string
+          success: boolean
+          tiny_order_id: number | null
+        }
+        Insert: {
+          attempts?: number
+          customer_name?: string | null
+          customer_phone?: string | null
+          dispatched_at?: string
+          error_message?: string | null
+          id?: string
+          is_test?: boolean
+          matched_category?: string | null
+          matched_product?: string | null
+          payload?: Json
+          response_body?: string | null
+          response_status?: number | null
+          rule_id: string
+          success?: boolean
+          tiny_order_id?: number | null
+        }
+        Update: {
+          attempts?: number
+          customer_name?: string | null
+          customer_phone?: string | null
+          dispatched_at?: string
+          error_message?: string | null
+          id?: string
+          is_test?: boolean
+          matched_category?: string | null
+          matched_product?: string | null
+          payload?: Json
+          response_body?: string | null
+          response_status?: number | null
+          rule_id?: string
+          success?: boolean
+          tiny_order_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_dispatches_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_rules: {
+        Row: {
+          allow_resend_after_days: number | null
+          categories: string[]
+          created_at: string
+          description: string | null
+          exclude_consumidor_final: boolean
+          flow_id: string | null
+          headers: Json
+          http_method: string
+          id: string
+          is_active: boolean
+          match_mode: string
+          name: string
+          priority: number
+          product_priority: boolean
+          product_skus: string[]
+          require_full_customer: boolean
+          require_phone: boolean
+          updated_at: string
+          webhook_url: string
+        }
+        Insert: {
+          allow_resend_after_days?: number | null
+          categories?: string[]
+          created_at?: string
+          description?: string | null
+          exclude_consumidor_final?: boolean
+          flow_id?: string | null
+          headers?: Json
+          http_method?: string
+          id?: string
+          is_active?: boolean
+          match_mode?: string
+          name: string
+          priority?: number
+          product_priority?: boolean
+          product_skus?: string[]
+          require_full_customer?: boolean
+          require_phone?: boolean
+          updated_at?: string
+          webhook_url: string
+        }
+        Update: {
+          allow_resend_after_days?: number | null
+          categories?: string[]
+          created_at?: string
+          description?: string | null
+          exclude_consumidor_final?: boolean
+          flow_id?: string | null
+          headers?: Json
+          http_method?: string
+          id?: string
+          is_active?: boolean
+          match_mode?: string
+          name?: string
+          priority?: number
+          product_priority?: boolean
+          product_skus?: string[]
+          require_full_customer?: boolean
+          require_phone?: boolean
+          updated_at?: string
+          webhook_url?: string
+        }
+        Relationships: []
+      }
       tiny_order_details_cache: {
         Row: {
           desconto: number | null
