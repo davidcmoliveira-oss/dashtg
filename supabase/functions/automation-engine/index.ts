@@ -153,9 +153,36 @@ Deno.serve(async (req) => {
 
     // Customer info from raw_json
     const raw = (order as any).raw_json ?? {};
-    const cliente = raw?.cliente ?? {};
+    const cliente = raw?.cliente ?? (detail as any)?.raw_json?.cliente ?? {};
     const customerName = String(order.nome ?? cliente?.nome ?? "");
-    const customerPhone = String(cliente?.fone ?? cliente?.celular ?? (detail as any)?.endereco_entrega?.fone ?? "");
+    const cpfCnpj = String(cliente?.cpf_cnpj ?? "").replace(/\D/g, "");
+
+    // Fetch phone from Tiny contact registry (cadastro), since order payload often lacks phone
+    let customerPhone = "";
+    const TINY_TOKEN = Deno.env.get("TINY_API_TOKEN");
+    if (TINY_TOKEN && (cpfCnpj || customerName)) {
+      try {
+        const searchBody = new URLSearchParams({ token: TINY_TOKEN, formato: "json" });
+        if (cpfCnpj) searchBody.set("cpf_cnpj", cpfCnpj);
+        else searchBody.set("pesquisa", customerName);
+        const sres = await fetch("https://api.tiny.com.br/api2/contatos.pesquisa.php", { method: "POST", body: searchBody });
+        const sjson = await sres.json().catch(() => ({}));
+        const contatos = sjson?.retorno?.contatos ?? [];
+        const found = contatos[0]?.contato;
+        if (found?.id) {
+          const obtBody = new URLSearchParams({ token: TINY_TOKEN, formato: "json", id: String(found.id) });
+          const ores = await fetch("https://api.tiny.com.br/api2/contato.obter.php", { method: "POST", body: obtBody });
+          const ojson = await ores.json().catch(() => ({}));
+          const c = ojson?.retorno?.contato ?? {};
+          customerPhone = String(c?.celular || c?.fone || found?.celular || found?.fone || "").trim();
+        } else {
+          customerPhone = String(found?.celular || found?.fone || "").trim();
+        }
+      } catch (_) { /* ignore, fallback below */ }
+    }
+    if (!customerPhone) {
+      customerPhone = String(cliente?.celular ?? cliente?.fone ?? (detail as any)?.endereco_entrega?.fone ?? "").trim();
+    }
 
     const items = extractItems(detail);
 
