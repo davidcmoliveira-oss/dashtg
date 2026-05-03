@@ -90,6 +90,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const force = Boolean(body.force);
     const ignoreDedup = Boolean(body.ignoreDedup);
+    const refreshDetails = Boolean(body.refreshDetails);
     const maxPages = Math.min(Number(body.maxPages ?? 2) || 2, 4);
     const maxOrders = Math.min(Number(body.maxOrders ?? 80) || 80, 150);
     const lookbackHours = Math.max(Number(body.lookbackHours ?? 1) || 1, 1);
@@ -168,7 +169,7 @@ serve(async (req) => {
       ? await database.from("tiny_order_details_cache").select("tiny_order_id").in("tiny_order_id", candidateIds)
       : { data: [] as any[] };
     const cachedDetailIds = new Set((cachedDetails ?? []).map((r: any) => Number(r.tiny_order_id)));
-    const detailsToFetch = force ? candidateIds : candidateIds.filter((id) => !cachedDetailIds.has(id));
+    const detailsToFetch = refreshDetails ? candidateIds : candidateIds.filter((id) => !cachedDetailIds.has(id));
 
     const detailRows: any[] = [];
     for (const orderId of detailsToFetch) {
