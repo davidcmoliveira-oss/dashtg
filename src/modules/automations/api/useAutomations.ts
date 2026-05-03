@@ -47,10 +47,10 @@ export function useAutomations() {
   const upsert = async (input: Partial<RuleInput> & { id?: string }) => {
     const { id, ...rest } = input;
     if (id) {
-      const { error } = await supabase.from("automation_rules").update(rest).eq("id", id);
+      const { error } = await (supabase as any).from("automation_rules").update(rest).eq("id", id);
       if (error) { toast.error("Erro ao salvar", { description: error.message }); return false; }
     } else {
-      const { error } = await supabase.from("automation_rules").insert(rest as any);
+      const { error } = await (supabase as any).from("automation_rules").insert(rest as any);
       if (error) { toast.error("Erro ao criar", { description: error.message }); return false; }
     }
     toast.success("Automação salva");
@@ -59,7 +59,7 @@ export function useAutomations() {
   };
 
   const remove = async (id: string) => {
-    const { error } = await supabase.from("automation_rules").delete().eq("id", id);
+    const { error } = await (supabase as any).from("automation_rules").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir", { description: error.message }); return; }
     toast.success("Automação excluída");
     await load();
@@ -123,7 +123,7 @@ export function useDispatches(ruleId?: string) {
 
   const load = useCallback(async () => {
     setIsLoading(true);
-    let q = supabase.from("automation_dispatches").select("*").order("dispatched_at", { ascending: false }).limit(500);
+    let q = (supabase as any).from("automation_dispatches").select("*").order("dispatched_at", { ascending: false }).limit(500);
     if (ruleId) q = q.eq("rule_id", ruleId);
     const { data, error } = await q;
     if (error) toast.error("Erro ao carregar logs", { description: error.message });
