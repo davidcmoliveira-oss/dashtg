@@ -99,6 +99,7 @@ serve(async (req) => {
     const refreshDetails = Boolean(body.refreshDetails);
     const maxPages = Math.min(Number(body.maxPages ?? 2) || 2, 4);
     const maxOrders = Math.min(Number(body.maxOrders ?? 80) || 80, 150);
+    const maxDetails = Math.min(Number(body.maxDetails ?? 12) || 12, 30);
     const lookbackHours = Math.max(Number(body.lookbackHours ?? 1) || 1, 1);
     const database = db();
 
@@ -189,7 +190,8 @@ serve(async (req) => {
       ? await database.from("tiny_order_details_cache").select("tiny_order_id").in("tiny_order_id", candidateIds)
       : { data: [] as any[] };
     const cachedDetailIds = new Set((cachedDetails ?? []).map((r: any) => Number(r.tiny_order_id)));
-    const detailsToFetch = refreshDetails ? candidateIds : candidateIds.filter((id) => !cachedDetailIds.has(id));
+    const missingDetailIds = candidateIds.filter((id) => !cachedDetailIds.has(id));
+    const detailsToFetch = (refreshDetails ? missingDetailIds : missingDetailIds).slice(0, maxDetails);
 
     const detailRows: any[] = [];
     for (const orderId of detailsToFetch) {
@@ -231,6 +233,7 @@ serve(async (req) => {
       fetched_from_tiny: fetchedOrders.length,
       billable_orders: rows.length,
       candidates: candidateIds.length,
+      missing_details: missingDetailIds.length,
       details_fetched: detailRows.length,
       processed: engineResults.length,
       rate_limited: rateLimited,
