@@ -142,7 +142,7 @@ serve(async (req) => {
       .sort((a: any, b: any) => Number(b.pedido.id) - Number(a.pedido.id))
       .slice(0, maxOrders);
 
-    const rows = recentBillable.map((o: any) => ({
+    let rows = recentBillable.map((o: any) => ({
       tiny_order_id: Number(o.pedido.id),
       numero: o.pedido.numero || null,
       numero_ecommerce: o.pedido.numero_ecommerce || null,
@@ -154,6 +154,19 @@ serve(async (req) => {
       raw_json: o,
       fetched_at: new Date().toISOString(),
     }));
+
+    if (rows.length === 0) {
+      const dayFilter = dataInicial === dataFinal ? [dataFinal] : [dataInicial, dataFinal];
+      const { data: cachedRows, error: cacheError } = await database
+        .from("tiny_orders_cache")
+        .select("tiny_order_id, numero, numero_ecommerce, data_pedido, nome, valor, situacao, codigo_rastreamento, raw_json, fetched_at")
+        .in("data_pedido", dayFilter)
+        .ilike("situacao", "%Faturado%")
+        .order("tiny_order_id", { ascending: false })
+        .limit(maxOrders);
+      if (cacheError) throw new Error(cacheError.message);
+      rows = (cachedRows ?? []).map((r: any) => ({ ...r, tiny_order_id: Number(r.tiny_order_id) }));
+    }
     if (rows.length > 0) {
       const { error } = await database.from("tiny_orders_cache").upsert(rows, { onConflict: "tiny_order_id" });
       if (error) throw new Error(error.message);
