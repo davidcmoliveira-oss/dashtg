@@ -186,13 +186,59 @@ Deno.serve(async (req) => {
 
     const items = extractItems(detail);
 
-    // Build product->category fallback map
+    // Build product->category fallback map (cache + on-demand Tiny fetch)
     const skus = items.map((i) => i.sku).filter(Boolean);
     const productCategoryMap = new Map<string, string>();
     if (skus.length > 0) {
       const { data: prods } = await supabase.from("tiny_products_cache").select("sku, categoria").in("sku", skus);
-      (prods ?? []).forEach((p: any) => productCategoryMap.set(norm(p.sku), norm(p.categoria)));
+      (prods ?? []).forEach((p: any) => {
+        const cat = norm(p.categoria);
+        if (cat) productCategoryMap.set(norm(p.sku), cat);
+      });
+
+      // Para SKUs sem categoria, buscar direto no Tiny ERP
+      const missingSkus = skus.filter((s) => !productCategoryMap.get(norm(s)));
+      if (missingSkus.length > 0 && TINY_TOKEN) {
+        for (const sku of missingSkus) {
+          try {
+            const sBody = new URLSearchParams({ token: TINY_TOKEN, formato: "json", pesquisa: sku });
+            const sRes = await fetch("https://api.tiny.com.br/api2/produtos.pesquisa.php", { method: "POST", body: sBody });
+            const sJson = await sRes.json().catch(() => ({}));
+            const prodList = sJson?.retorno?.produtos ?? [];
+            const found = prodList.find((p: any) => norm(p?.produto?.codigo) === norm(sku))?.produto ?? prodList[0]?.produto;
+            if (!found?.id) continue;
+            const oBody = new URLSearchParams({ token: TINY_TOKEN, formato: "json", id: String(found.id) });
+            const oRes = await fetch("https://api.tiny.com.br/api2/produto.obter.php", { method: "POST", body: oBody });
+            const oJson = await oRes.json().catch(() => ({}));
+            const prod = oJson?.retorno?.produto ?? {};
+            const categoria = String(prod?.categoria ?? found?.categoria ?? "").trim();
+            if (categoria) {
+              productCategoryMap.set(norm(sku), norm(categoria));
+              await supabase.from("tiny_products_cache").upsert({
+                sku: String(sku),
+                tiny_product_id: Number(found.id) || null,
+                nome: String(prod?.nome ?? found?.nome ?? ""),
+                categoria,
+                marca: String(prod?.marca ?? ""),
+                unidade: String(prod?.unidade ?? ""),
+                preco: Number(prod?.preco ?? 0),
+                raw_json: prod,
+                fetched_at: new Date().toISOString(),
+              }, { onConflict: "sku" });
+            }
+            await new Promise((r) => setTimeout(r, 600));
+          } catch (_) { /* ignore */ }
+        }
+      }
     }
+
+    // Re-popular categoria nos items a partir do mapa
+    items.forEach((it) => {
+      if (!it.categoria) {
+        const c = productCategoryMap.get(norm(it.sku));
+        if (c) it.categoria = c;
+      }
+    });
 
     // Load rules
     let q = supabase.from("automation_rules").select("*").order("priority", { ascending: false });
