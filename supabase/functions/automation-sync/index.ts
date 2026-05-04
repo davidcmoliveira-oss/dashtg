@@ -9,17 +9,23 @@ const corsHeaders = {
 const db = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const norm = (value: unknown) => String(value ?? "").trim().toLowerCase();
+const TIME_ZONE = "America/Sao_Paulo";
 
 const json = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const formatDate = (d: Date) => {
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}/${d.getFullYear()}`;
-};
+const formatDate = (d: Date) => new Intl.DateTimeFormat("pt-BR", {
+  timeZone: TIME_ZONE,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+}).format(d);
 
 const isRateLimitError = (msg: string) => msg.includes("Bloqueada") || msg.includes("Excedido");
+const isNoRecordsError = (msg: string) => {
+  const text = norm(msg).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return text.includes("consulta nao retornou registros") || text.includes("nao foram encontrados registros");
+};
 const isBillableOrder = (situacao: unknown) => norm(situacao).includes("faturado");
 
 async function tinyPost(endpoint: string, params: Record<string, string>) {
@@ -123,6 +129,7 @@ serve(async (req) => {
       if (listing.retorno?.status === "Erro") {
         const erros = listing.retorno?.erros?.map((e: { erro: string }) => e.erro).join(", ") || "Erro Tiny";
         if (isRateLimitError(erros)) { rateLimited = true; break; }
+        if (isNoRecordsError(erros)) break;
         throw new Error(erros);
       }
       fetchedOrders.push(...(listing.retorno?.pedidos ?? []));
