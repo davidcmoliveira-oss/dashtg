@@ -9,17 +9,23 @@ const corsHeaders = {
 const db = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const norm = (value: unknown) => String(value ?? "").trim().toLowerCase();
+const TIME_ZONE = "America/Sao_Paulo";
 
 const json = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-const formatDate = (d: Date) => {
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}/${d.getFullYear()}`;
-};
+const formatDate = (d: Date) => new Intl.DateTimeFormat("pt-BR", {
+  timeZone: TIME_ZONE,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+}).format(d);
 
 const isRateLimitError = (msg: string) => msg.includes("Bloqueada") || msg.includes("Excedido");
+const isNoRecordsError = (msg: string) => {
+  const text = norm(msg).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return text.includes("consulta nao retornou registros") || text.includes("nao foram encontrados registros");
+};
 const isBillableOrder = (situacao: unknown) => norm(situacao).includes("faturado");
 
 async function tinyPost(endpoint: string, params: Record<string, string>) {
@@ -93,6 +99,7 @@ serve(async (req) => {
     const refreshDetails = Boolean(body.refreshDetails);
     const maxPages = Math.min(Number(body.maxPages ?? 2) || 2, 4);
     const maxOrders = Math.min(Number(body.maxOrders ?? 80) || 80, 150);
+    const maxDetails = Math.min(Number(body.maxDetails ?? 12) || 12, 30);
     const lookbackHours = Math.max(Number(body.lookbackHours ?? 1) || 1, 1);
     const database = db();
 
@@ -123,6 +130,7 @@ serve(async (req) => {
       if (listing.retorno?.status === "Erro") {
         const erros = listing.retorno?.erros?.map((e: { erro: string }) => e.erro).join(", ") || "Erro Tiny";
         if (isRateLimitError(erros)) { rateLimited = true; break; }
+        if (isNoRecordsError(erros)) break;
         throw new Error(erros);
       }
       fetchedOrders.push(...(listing.retorno?.pedidos ?? []));
@@ -135,7 +143,7 @@ serve(async (req) => {
       .sort((a: any, b: any) => Number(b.pedido.id) - Number(a.pedido.id))
       .slice(0, maxOrders);
 
-    const rows = recentBillable.map((o: any) => ({
+    let rows = recentBillable.map((o: any) => ({
       tiny_order_id: Number(o.pedido.id),
       numero: o.pedido.numero || null,
       numero_ecommerce: o.pedido.numero_ecommerce || null,
@@ -147,6 +155,19 @@ serve(async (req) => {
       raw_json: o,
       fetched_at: new Date().toISOString(),
     }));
+
+    if (rows.length === 0) {
+      const dayFilter = dataInicial === dataFinal ? [dataFinal] : [dataInicial, dataFinal];
+      const { data: cachedRows, error: cacheError } = await database
+        .from("tiny_orders_cache")
+        .select("tiny_order_id, numero, numero_ecommerce, data_pedido, nome, valor, situacao, codigo_rastreamento, raw_json, fetched_at")
+        .in("data_pedido", dayFilter)
+        .ilike("situacao", "%Faturado%")
+        .order("tiny_order_id", { ascending: false })
+        .limit(maxOrders);
+      if (cacheError) throw new Error(cacheError.message);
+      rows = (cachedRows ?? []).map((r: any) => ({ ...r, tiny_order_id: Number(r.tiny_order_id) }));
+    }
     if (rows.length > 0) {
       const { error } = await database.from("tiny_orders_cache").upsert(rows, { onConflict: "tiny_order_id" });
       if (error) throw new Error(error.message);
@@ -169,7 +190,8 @@ serve(async (req) => {
       ? await database.from("tiny_order_details_cache").select("tiny_order_id").in("tiny_order_id", candidateIds)
       : { data: [] as any[] };
     const cachedDetailIds = new Set((cachedDetails ?? []).map((r: any) => Number(r.tiny_order_id)));
-    const detailsToFetch = refreshDetails ? candidateIds : candidateIds.filter((id) => !cachedDetailIds.has(id));
+    const missingDetailIds = candidateIds.filter((id) => !cachedDetailIds.has(id));
+    const detailsToFetch = (refreshDetails ? missingDetailIds : missingDetailIds).slice(0, maxDetails);
 
     const detailRows: any[] = [];
     for (const orderId of detailsToFetch) {
@@ -211,6 +233,7 @@ serve(async (req) => {
       fetched_from_tiny: fetchedOrders.length,
       billable_orders: rows.length,
       candidates: candidateIds.length,
+      missing_details: missingDetailIds.length,
       details_fetched: detailRows.length,
       processed: engineResults.length,
       rate_limited: rateLimited,
