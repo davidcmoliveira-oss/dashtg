@@ -166,7 +166,12 @@ export const CustomerTrendsReport = ({ trendSeries, behaviorChange }: Props) => 
               </button>
             ))}
           </div>
+          <BotConversaExportButton
+            reportSlug="mudancas-comportamento"
+            customers={filtered.map((b) => ({ customer_id: b.customer_id, customer_name: b.name }))}
+          />
         </div>
+
 
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
