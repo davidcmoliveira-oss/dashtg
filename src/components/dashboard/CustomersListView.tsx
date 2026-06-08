@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Search, Users, UserCheck, TrendingUp, ShoppingBag, Package, Clock, RotateCcw, CreditCard } from "lucide-react";
+import { BotConversaExportButton } from "./botconversa/BotConversaExportButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,13 +43,39 @@ export const CustomersListView = ({ customers, orders, allOrders, isLoading, onC
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState<'value' | 'orders' | 'items'>('value');
+  const [lastPurchaseMin, setLastPurchaseMin] = useState<string>("");
+  const [lastPurchaseMax, setLastPurchaseMax] = useState<string>("");
+  const [avgBetweenMin, setAvgBetweenMin] = useState<string>("");
+  const [avgBetweenMax, setAvgBetweenMax] = useState<string>("");
   const itemsPerPage = 20;
 
   const formatCurrency = (value: number) =>
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 
+  const parseNum = (s: string): number | null => {
+    if (s === "" || s === null || s === undefined) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const lpMin = parseNum(lastPurchaseMin);
+  const lpMax = parseNum(lastPurchaseMax);
+  const abMin = parseNum(avgBetweenMin);
+  const abMax = parseNum(avgBetweenMax);
+  const hasAvgFilter = abMin !== null || abMax !== null;
+
   const filteredCustomers = customers
     .filter(c => c.customer_name.toLowerCase().includes(search.toLowerCase()))
+    .filter(c => {
+      if (lpMin !== null && c.days_since_last_purchase < lpMin) return false;
+      if (lpMax !== null && c.days_since_last_purchase > lpMax) return false;
+      if (hasAvgFilter) {
+        const v = c.avg_days_between_purchases;
+        if (!v || v <= 0) return false;
+        if (abMin !== null && v < abMin) return false;
+        if (abMax !== null && v > abMax) return false;
+      }
+      return true;
+    })
     .sort((a, b) => {
       if (sortBy === 'orders') return b.total_orders - a.total_orders;
       if (sortBy === 'items') return b.items_count - a.items_count;
