@@ -106,11 +106,39 @@ Deno.serve(async (req) => {
       toFallback.push(id);
     }
 
-    // 2. Fallback: individual search on Tiny by name + similarity score
+    // 2. Fallback: prefer tiny_contact_id from cache (bulk_sync stored ID but no phone).
+    //    Otherwise search by name and apply similarity score.
     for (const id of toFallback) {
       const nomeNorm = idToNorm.get(id) ?? "";
       if (!nomeNorm) {
         phones[id] = null;
+        continue;
+      }
+      const cached = cacheMap.get(nomeNorm);
+
+      // 2a. We already know the Tiny contact id from bulk sync — just fetch phones.
+      if (cached?.tinyId) {
+        const det = await fetchTinyContato(cached.tinyId);
+        const tel = det
+          ? normalizePhoneBR(det.celular) || normalizePhoneBR(det.fone)
+          : null;
+        await supabase.from("tiny_customers_cache").upsert(
+          {
+            customer_id: nomeNorm,
+            nome_normalizado: nomeNorm,
+            tiny_contact_id: cached.tinyId,
+            nome: id,
+            fone: det?.fone ?? null,
+            celular: det?.celular ?? null,
+            telefone_normalizado: tel,
+            sem_telefone: !tel,
+            match_score: 100,
+            source: "bulk_sync+obter",
+            synced_at: new Date().toISOString(),
+          },
+          { onConflict: "nome_normalizado" },
+        );
+        phones[id] = tel;
         continue;
       }
 
