@@ -10,6 +10,7 @@ import { CustomersListView } from "@/components/dashboard/CustomersListView";
 import { CustomerDetailView } from "@/components/dashboard/CustomerDetailView";
 import { ProductsView } from "@/components/dashboard/ProductsView";
 import { WebhookConfig } from "@/components/dashboard/WebhookConfig";
+import { PhoneSyncCard } from "@/components/dashboard/PhoneSyncCard";
 import { ReportsView } from "@/components/dashboard/ReportsView";
 import { AiInsightsPanel } from "@/components/dashboard/AiInsightsPanel";
 import { AutomationsView } from "@/modules/automations/ui/AutomationsView";
@@ -142,12 +143,13 @@ const Index = () => {
     switch (activeItem) {
       case "webhooks":
         return (
-          <div className="max-w-2xl">
-            <div className="mb-8">
+          <div className="max-w-2xl space-y-6">
+            <div className="mb-2">
               <h1 className="text-2xl font-bold">API & Webhooks</h1>
               <p className="text-muted-foreground">Configure a integração com seu ERP</p>
             </div>
             <WebhookConfig onSave={setApiConfig} currentConfig={apiConfig || undefined} />
+            <PhoneSyncCard />
           </div>
         );
 
