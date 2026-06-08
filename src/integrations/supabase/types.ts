@@ -148,10 +148,15 @@ export type Database = {
           created_at: string
           customer_id: string
           fone: string | null
+          match_score: number | null
           nome: string | null
+          nome_normalizado: string | null
+          nome_original: string | null
           sem_telefone: boolean
           source: string | null
+          synced_at: string | null
           telefone_normalizado: string | null
+          tiny_contact_id: string | null
           updated_at: string
         }
         Insert: {
@@ -159,10 +164,15 @@ export type Database = {
           created_at?: string
           customer_id: string
           fone?: string | null
+          match_score?: number | null
           nome?: string | null
+          nome_normalizado?: string | null
+          nome_original?: string | null
           sem_telefone?: boolean
           source?: string | null
+          synced_at?: string | null
           telefone_normalizado?: string | null
+          tiny_contact_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -170,10 +180,15 @@ export type Database = {
           created_at?: string
           customer_id?: string
           fone?: string | null
+          match_score?: number | null
           nome?: string | null
+          nome_normalizado?: string | null
+          nome_original?: string | null
           sem_telefone?: boolean
           source?: string | null
+          synced_at?: string | null
           telefone_normalizado?: string | null
+          tiny_contact_id?: string | null
           updated_at?: string
         }
         Relationships: []
