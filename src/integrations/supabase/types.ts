@@ -142,6 +142,42 @@ export type Database = {
         }
         Relationships: []
       }
+      tiny_customers_cache: {
+        Row: {
+          celular: string | null
+          created_at: string
+          customer_id: string
+          fone: string | null
+          nome: string | null
+          sem_telefone: boolean
+          source: string | null
+          telefone_normalizado: string | null
+          updated_at: string
+        }
+        Insert: {
+          celular?: string | null
+          created_at?: string
+          customer_id: string
+          fone?: string | null
+          nome?: string | null
+          sem_telefone?: boolean
+          source?: string | null
+          telefone_normalizado?: string | null
+          updated_at?: string
+        }
+        Update: {
+          celular?: string | null
+          created_at?: string
+          customer_id?: string
+          fone?: string | null
+          nome?: string | null
+          sem_telefone?: boolean
+          source?: string | null
+          telefone_normalizado?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tiny_order_details_cache: {
         Row: {
           desconto: number | null
