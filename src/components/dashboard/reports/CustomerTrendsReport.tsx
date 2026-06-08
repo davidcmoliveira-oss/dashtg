@@ -13,6 +13,7 @@ import {
 import { ReportHeader } from "./shared/ReportInfo";
 import { CHART_COLORS, CHART_DEFAULTS, fmtBRL, fmtBRLk } from "@/lib/chartColors";
 import { cn } from "@/lib/utils";
+import { BotConversaExportButton } from "../botconversa/BotConversaExportButton";
 
 interface Props {
   trendSeries: ReportsAnalytics["trendSeries"];
@@ -165,7 +166,12 @@ export const CustomerTrendsReport = ({ trendSeries, behaviorChange }: Props) => 
               </button>
             ))}
           </div>
+          <BotConversaExportButton
+            reportSlug="mudancas-comportamento"
+            customers={filtered.map((b) => ({ customer_id: b.customer_id, customer_name: b.name }))}
+          />
         </div>
+
 
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">

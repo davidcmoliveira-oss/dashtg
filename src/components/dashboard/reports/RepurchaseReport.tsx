@@ -1,5 +1,6 @@
 import { RepurchaseStats } from "@/hooks/useReportsAnalytics";
 import { ReportHeader } from "./shared/ReportInfo";
+import { BotConversaExportButton } from "../botconversa/BotConversaExportButton";
 
 interface Props { data: RepurchaseStats; }
 
@@ -37,7 +38,13 @@ export const RepurchaseReport = ({ data }: Props) => {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 className="font-semibold mb-2 text-sm">Top 10 clientes recompradores</h3>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            <h3 className="font-semibold text-sm">Top 10 clientes recompradores</h3>
+            <BotConversaExportButton
+              reportSlug="top-recompradores"
+              customers={data.top_repurchasers.map((r) => ({ customer_id: r.customer_id, customer_name: r.name }))}
+            />
+          </div>
           <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">

@@ -239,7 +239,7 @@ export interface RepurchaseStats {
   rate: number;
   avg_days_to_second: number;
   avg_repurchase_ticket: number;
-  top_repurchasers: Array<{ name: string; spend: number; orders: number }>;
+  top_repurchasers: Array<{ customer_id: string; name: string; spend: number; orders: number }>;
   cohort: Array<{ cohort: string; m0: number; m1: number; m2: number; m3: number; m6: number; m12: number }>;
 }
 
@@ -654,7 +654,7 @@ export const useReportsAnalytics = (
     let totalDaysToSecond = 0;
     let repurchaseRevenue = 0;
     let repurchaseCount = 0;
-    const repurchasers: Array<{ name: string; spend: number; orders: number }> = [];
+    const repurchasers: Array<{ customer_id: string; name: string; spend: number; orders: number }> = [];
     customers.forEach((c) => {
       if (c.total_orders >= 2) {
         withSecond++;
@@ -667,7 +667,7 @@ export const useReportsAnalytics = (
           repurchaseRevenue += o.net_revenue || o.total_paid || 0;
           repurchaseCount++;
         });
-        repurchasers.push({ name: c.customer_name, spend: c.total_spend, orders: c.total_orders });
+        repurchasers.push({ customer_id: c.customer_id, name: c.customer_name, spend: c.total_spend, orders: c.total_orders });
       }
     });
     repurchasers.sort((a, b) => b.spend - a.spend);
