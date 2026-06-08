@@ -107,16 +107,22 @@ Deno.serve(async (req) => {
     }
 
     // 2. Fallback: prefer tiny_contact_id from cache (bulk_sync stored ID but no phone).
-    //    Otherwise search by name and apply similarity score.
-    for (const id of toFallback) {
+    //    Otherwise search by name. Cap work per invocation and run in parallel
+    //    to stay within the 150s edge runtime limit.
+    const MAX_FALLBACK = 80;
+    const CONCURRENCY = 8;
+    const capped = toFallback.slice(0, MAX_FALLBACK);
+    // Mark unhandled ones as null so the client doesn't block on them.
+    for (const id of toFallback.slice(MAX_FALLBACK)) phones[id] = null;
+
+    const processOne = async (id: string) => {
       const nomeNorm = idToNorm.get(id) ?? "";
       if (!nomeNorm) {
         phones[id] = null;
-        continue;
+        return;
       }
       const cached = cacheMap.get(nomeNorm);
 
-      // 2a. We already know the Tiny contact id from bulk sync — just fetch phones.
       if (cached?.tinyId) {
         const det = await fetchTinyContato(cached.tinyId);
         const tel = det
@@ -139,7 +145,7 @@ Deno.serve(async (req) => {
           { onConflict: "nome_normalizado" },
         );
         phones[id] = tel;
-        continue;
+        return;
       }
 
       const contatos = await searchTinyContatos(id);
@@ -157,8 +163,6 @@ Deno.serve(async (req) => {
         let fone = bestMatch.fone ?? null;
         let celular = bestMatch.celular ?? null;
         let tel = normalizePhoneBR(celular) || normalizePhoneBR(fone);
-
-        // Try contato.obter for fuller phones if missing
         if (!tel && bestMatch.id) {
           const det = await fetchTinyContato(String(bestMatch.id));
           if (det) {
@@ -167,7 +171,6 @@ Deno.serve(async (req) => {
             tel = normalizePhoneBR(celular) || normalizePhoneBR(fone);
           }
         }
-
         await supabase.from("tiny_customers_cache").upsert(
           {
             customer_id: nomeNorm,
@@ -202,7 +205,22 @@ Deno.serve(async (req) => {
         );
         phones[id] = null;
       }
-    }
+    };
+
+    // Run with a small concurrency pool
+    let cursor = 0;
+    const workers = Array.from({ length: CONCURRENCY }, async () => {
+      while (cursor < capped.length) {
+        const idx = cursor++;
+        try {
+          await processOne(capped[idx]);
+        } catch (e) {
+          console.error("processOne error", capped[idx], e);
+          phones[capped[idx]] = null;
+        }
+      }
+    });
+    await Promise.all(workers);
 
     return new Response(JSON.stringify({ phones }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
