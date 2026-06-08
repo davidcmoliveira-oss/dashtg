@@ -15,6 +15,28 @@ function normalizePhoneBR(raw: string | null | undefined): string | null {
   return null;
 }
 
+const TINY_TOKEN = Deno.env.get("TINY_API_TOKEN");
+const TINY_BASE = "https://api.tiny.com.br/api2";
+
+async function fetchTinyContato(id: string): Promise<{ fone: string | null; celular: string | null } | null> {
+  if (!TINY_TOKEN || !id) return null;
+  try {
+    const body = new URLSearchParams({ token: TINY_TOKEN, formato: "json", id });
+    const res = await fetch(`${TINY_BASE}/contato.obter.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    const json = await res.json();
+    const contato = json?.retorno?.contato;
+    if (!contato) return null;
+    return { fone: contato.fone || null, celular: contato.celular || null };
+  } catch (e) {
+    console.error("tiny contato fetch error", id, e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -73,12 +95,24 @@ Deno.serve(async (req) => {
         for (const { name, rows } of results) {
           let fone: string | null = null;
           let celular: string | null = null;
+          let codigo: string | null = null;
           for (const row of rows) {
             const cliente = (row as any).raw_json?.cliente;
             if (!cliente) continue;
+            if (!codigo && cliente.codigo) codigo = String(cliente.codigo);
             if (!fone && cliente.fone) fone = String(cliente.fone);
             if (!celular && cliente.celular) celular = String(cliente.celular);
             if (fone || celular) break;
+          }
+          // Fallback: fetch contact details from Tiny API when phones missing
+          let source = "raw_json";
+          if (!normalizePhoneBR(fone) && !normalizePhoneBR(celular) && codigo) {
+            const contato = await fetchTinyContato(codigo);
+            if (contato) {
+              fone = contato.fone || fone;
+              celular = contato.celular || celular;
+              source = "tiny_api";
+            }
           }
           const normalized = normalizePhoneBR(celular) || normalizePhoneBR(fone);
           upserts.push({
@@ -88,7 +122,7 @@ Deno.serve(async (req) => {
             celular,
             telefone_normalizado: normalized,
             sem_telefone: !normalized,
-            source: "raw_json",
+            source,
           });
           existingMap.set(name, { phone: normalized, missing: !normalized });
         }
