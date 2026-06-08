@@ -1,5 +1,6 @@
 import { RepurchaseStats } from "@/hooks/useReportsAnalytics";
 import { ReportHeader } from "./shared/ReportInfo";
+import { BotConversaExportButton } from "../botconversa/BotConversaExportButton";
 
 interface Props { data: RepurchaseStats; }
 

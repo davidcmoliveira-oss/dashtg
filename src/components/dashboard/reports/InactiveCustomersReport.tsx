@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { ReportHeader } from "./shared/ReportInfo";
 import { CHART_COLORS, CHART_DEFAULTS, fmtBRLk } from "@/lib/chartColors";
+import { BotConversaExportButton } from "../botconversa/BotConversaExportButton";
 
 interface Props {
   buckets: InactivityBucket[];
@@ -80,13 +81,19 @@ export const InactiveCustomersReport = ({ buckets, customers }: Props) => {
       </div>
 
       <div>
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex justify-between items-center mb-2 gap-2 flex-wrap">
           <h3 className="font-semibold text-sm">Top clientes para reativação {bucket ? `(${bucket})` : ""}</h3>
-          {bucket && (
-            <Button size="sm" variant="ghost" onClick={() => setBucket(null)}>
-              Limpar filtro
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {bucket && (
+              <Button size="sm" variant="ghost" onClick={() => setBucket(null)}>
+                Limpar filtro
+              </Button>
+            )}
+            <BotConversaExportButton
+              reportSlug="top-reativacao"
+              customers={filtered.map((c) => ({ customer_id: c.customer_id, customer_name: c.customer_name }))}
+            />
+          </div>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
