@@ -489,10 +489,60 @@ export const CustomersListView = ({ customers, orders, allOrders, isLoading, onC
       <div className="rounded-xl border border-border bg-card p-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <h3 className="text-lg font-semibold">Ranking de Clientes</h3>
-          <div className="flex gap-1">
-            <Button variant={sortBy === 'value' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('value'); setCurrentPage(1); }}>Por valor</Button>
-            <Button variant={sortBy === 'orders' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('orders'); setCurrentPage(1); }}>Por pedidos</Button>
-            <Button variant={sortBy === 'items' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('items'); setCurrentPage(1); }}>Por itens</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-1">
+              <Button variant={sortBy === 'value' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('value'); setCurrentPage(1); }}>Por valor</Button>
+              <Button variant={sortBy === 'orders' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('orders'); setCurrentPage(1); }}>Por pedidos</Button>
+              <Button variant={sortBy === 'items' ? 'default' : 'ghost'} size="sm" onClick={() => { setSortBy('items'); setCurrentPage(1); }}>Por itens</Button>
+            </div>
+            <BotConversaExportButton
+              reportSlug="ranking-clientes"
+              customers={filteredCustomers.map((c) => ({ customer_id: c.customer_id, customer_name: c.customer_name }))}
+            />
+          </div>
+        </div>
+
+        {/* Novos filtros: recência e frequência */}
+        <div className="grid gap-3 sm:grid-cols-2 mb-4">
+          <div className="rounded-lg border border-border p-3 bg-secondary/20">
+            <p className="text-xs text-muted-foreground mb-2">Dias desde última compra</p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                placeholder="De"
+                value={lastPurchaseMin}
+                onChange={(e) => { setLastPurchaseMin(e.target.value); setCurrentPage(1); }}
+                className="h-8"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input
+                type="number"
+                placeholder="Até"
+                value={lastPurchaseMax}
+                onChange={(e) => { setLastPurchaseMax(e.target.value); setCurrentPage(1); }}
+                className="h-8"
+              />
+            </div>
+          </div>
+          <div className="rounded-lg border border-border p-3 bg-secondary/20">
+            <p className="text-xs text-muted-foreground mb-2">Média de dias entre compras</p>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                placeholder="De"
+                value={avgBetweenMin}
+                onChange={(e) => { setAvgBetweenMin(e.target.value); setCurrentPage(1); }}
+                className="h-8"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input
+                type="number"
+                placeholder="Até"
+                value={avgBetweenMax}
+                onChange={(e) => { setAvgBetweenMax(e.target.value); setCurrentPage(1); }}
+                className="h-8"
+              />
+            </div>
           </div>
         </div>
 
@@ -502,40 +552,48 @@ export const CustomersListView = ({ customers, orders, allOrders, isLoading, onC
               Nenhum cliente encontrado
             </div>
           ) : (
-            paginatedCustomers.map((customer, index) => (
-              <div
-                key={customer.customer_id}
-                className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 p-4 transition-colors hover:bg-secondary/50 cursor-pointer"
-                onClick={() => onCustomerClick(customer.customer_id)}
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                    {(currentPage - 1) * itemsPerPage + index + 1}º
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{customer.customer_name}</p>
-                      <Badge variant={customer.is_active ? "default" : "secondary"} className="text-xs">
-                        {customer.is_active ? "Ativo" : "Inativo"}
-                      </Badge>
+            paginatedCustomers.map((customer, index) => {
+              const avgBetween = customer.avg_days_between_purchases;
+              const avgBetweenLabel = customer.total_orders >= 2 && avgBetween > 0
+                ? `${Math.round(avgBetween)} dias`
+                : '—';
+              return (
+                <div
+                  key={customer.customer_id}
+                  className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 p-4 transition-colors hover:bg-secondary/50 cursor-pointer"
+                  onClick={() => onCustomerClick(customer.customer_id)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                      {(currentPage - 1) * itemsPerPage + index + 1}º
                     </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{customer.customer_name}</p>
+                        <Badge variant={customer.is_active ? "default" : "secondary"} className="text-xs">
+                          {customer.is_active ? "Ativo" : "Inativo"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {customer.total_orders} pedido{customer.total_orders > 1 ? 's' : ''} •
+                        Último: {customer.last_order_date} •
+                        Última compra: {customer.days_since_last_purchase} dias •
+                        Média entre compras: {avgBetweenLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">{formatCurrency(customer.total_spend)}</p>
                     <p className="text-sm text-muted-foreground">
-                      {customer.total_orders} pedido{customer.total_orders > 1 ? 's' : ''} • 
-                      Último: {customer.last_order_date} • 
-                      {customer.days_since_last_purchase} dias atrás
+                      Ticket: {formatCurrency(customer.avg_ticket)}
                     </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold">{formatCurrency(customer.total_spend)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Ticket: {formatCurrency(customer.avg_ticket)}
-                  </p>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
+
 
         {/* Pagination */}
         {totalPages > 1 && (
