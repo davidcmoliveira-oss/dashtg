@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.automation-sync]
 verify_jwt = false
+
+[functions.sync-tiny-contacts]
+verify_jwt = false
+
+[functions.enrich-customer-phones]
+verify_jwt = false
