@@ -90,39 +90,45 @@ Deno.serve(async (req) => {
       totalPages = Number(json.retorno.numero_paginas ?? 1);
       const contatos: any[] = json.retorno.contatos ?? [];
 
-      const upserts = contatos
-        .map((c: any) => c.contato ?? c)
-        .filter((c: any) => c && c.nome)
-        .map((c: any) => {
-          const nomeNorm = normalizeNome(c.nome);
-          const tel = normalizePhoneBR(c.fone ?? "");
-          if (!nomeNorm) return null;
-          return {
-            customer_id: nomeNorm,
-            nome_normalizado: nomeNorm,
-            tiny_contact_id: c.id ? String(c.id) : null,
-            nome_original: c.nome,
-            nome: c.nome,
-            fone: c.fone ?? null,
-            telefone_normalizado: tel,
-            sem_telefone: !tel,
-            match_score: 100,
-            source: "bulk_sync",
-            synced_at: new Date().toISOString(),
-          };
-        })
-        .filter(Boolean);
+      // Dedupe by nome_normalizado within the page (pesquisa.php sometimes
+      // returns duplicates and Postgres upsert fails on duplicate keys).
+      const seen = new Map<string, any>();
+      for (const wrapper of contatos) {
+        const c = wrapper?.contato ?? wrapper;
+        if (!c?.nome) continue;
+        const nomeNorm = normalizeNome(c.nome);
+        if (!nomeNorm) continue;
+        const tel = normalizePhoneBR(c.fone ?? "");
+        // pesquisa.php usually returns empty fone — keep sem_telefone=false so
+        // enrich-customer-phones can still fetch contato.obter later using
+        // tiny_contact_id. Only flag confirmed-empty when bulk has fone but it
+        // doesn't parse.
+        seen.set(nomeNorm, {
+          customer_id: nomeNorm,
+          nome_normalizado: nomeNorm,
+          tiny_contact_id: c.id ? String(c.id) : null,
+          nome_original: c.nome,
+          nome: c.nome,
+          fone: c.fone ?? null,
+          telefone_normalizado: tel,
+          sem_telefone: false,
+          match_score: tel ? 100 : 0,
+          source: "bulk_sync",
+          synced_at: new Date().toISOString(),
+        });
+      }
+      const upserts = [...seen.values()];
 
       if (upserts.length > 0) {
         const { error } = await supabase
           .from("tiny_customers_cache")
-          .upsert(upserts as any, { onConflict: "nome_normalizado" });
+          .upsert(upserts, { onConflict: "nome_normalizado" });
         if (error) {
           console.error("upsert error page", pagina, error);
         } else {
           synced += upserts.length;
-          withPhone += (upserts as any[]).filter((u) => u.telefone_normalizado).length;
-          noPhone += (upserts as any[]).filter((u) => !u.telefone_normalizado).length;
+          withPhone += upserts.filter((u) => u.telefone_normalizado).length;
+          noPhone += upserts.filter((u) => !u.telefone_normalizado).length;
         }
       }
 
