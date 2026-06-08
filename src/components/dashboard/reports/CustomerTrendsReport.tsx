@@ -13,6 +13,7 @@ import {
 import { ReportHeader } from "./shared/ReportInfo";
 import { CHART_COLORS, CHART_DEFAULTS, fmtBRL, fmtBRLk } from "@/lib/chartColors";
 import { cn } from "@/lib/utils";
+import { BotConversaExportButton } from "../botconversa/BotConversaExportButton";
 
 interface Props {
   trendSeries: ReportsAnalytics["trendSeries"];
