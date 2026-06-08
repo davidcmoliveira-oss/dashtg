@@ -40,19 +40,32 @@ export const BotConversaExportDialog = ({ open, onOpenChange, customers, reportS
     setPhones({});
     if (customers.length === 0) return;
     setLoadingPhones(true);
-    supabase.functions
-      .invoke("enrich-customer-phones", {
-        body: { customer_ids: customers.map((c) => c.customer_id) },
-      })
-      .then(({ data, error }) => {
-        if (error) {
-          toast.error("Erro ao buscar telefones");
-          setPhones({});
-        } else {
-          setPhones((data as any)?.phones || {});
+    const ids = customers.map((c) => c.customer_id);
+    const BATCH = 60;
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += BATCH) chunks.push(ids.slice(i, i + BATCH));
+
+    (async () => {
+      const merged: Record<string, string | null> = {};
+      let hadError = false;
+      for (const chunk of chunks) {
+        try {
+          const { data, error } = await supabase.functions.invoke("enrich-customer-phones", {
+            body: { customer_ids: chunk },
+          });
+          if (error) {
+            hadError = true;
+            continue;
+          }
+          Object.assign(merged, (data as any)?.phones || {});
+          setPhones({ ...merged });
+        } catch {
+          hadError = true;
         }
-      })
-      .finally(() => setLoadingPhones(false));
+      }
+      if (hadError) toast.error("Alguns telefones não puderam ser buscados");
+      setLoadingPhones(false);
+    })();
   }, [open, customers]);
 
   useEffect(() => {
