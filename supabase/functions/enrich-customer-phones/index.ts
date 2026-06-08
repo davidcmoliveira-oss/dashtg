@@ -72,11 +72,11 @@ Deno.serve(async (req) => {
     const normValues = [...new Set([...idToNorm.values()].filter(Boolean))];
 
     // 1. Bulk lookup by nome_normalizado
-    const cacheMap = new Map<string, { phone: string | null; missing: boolean; score: number }>();
+    const cacheMap = new Map<string, { phone: string | null; missing: boolean; score: number; tinyId: string | null; source: string | null }>();
     if (normValues.length > 0) {
       const { data: cached } = await supabase
         .from("tiny_customers_cache")
-        .select("nome_normalizado, telefone_normalizado, sem_telefone, match_score")
+        .select("nome_normalizado, telefone_normalizado, sem_telefone, match_score, tiny_contact_id, source")
         .in("nome_normalizado", normValues);
       (cached ?? []).forEach((r: any) => {
         if (r.nome_normalizado) {
@@ -84,6 +84,8 @@ Deno.serve(async (req) => {
             phone: r.telefone_normalizado ?? null,
             missing: !!r.sem_telefone,
             score: r.match_score ?? 0,
+            tinyId: r.tiny_contact_id ?? null,
+            source: r.source ?? null,
           });
         }
       });
