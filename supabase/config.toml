@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.enrich-customer-phones]
 verify_jwt = false
+
+[functions.admin-sync-ingest-config]
+verify_jwt = false
