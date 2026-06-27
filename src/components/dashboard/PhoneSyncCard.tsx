@@ -1,68 +1,79 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { RefreshCw, Phone } from "lucide-react";
+import { RefreshCw, Phone, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface CacheStats {
   total: number;
   with_phone: number;
-  no_phone: number;
-  last_sync: string | null;
+  no_phone_flagged: number;
+  pending: number;
 }
 
 export const PhoneSyncCard = () => {
   const [loading, setLoading] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [stats, setStats] = useState<CacheStats | null>(null);
+  const [progress, setProgress] = useState<string>("");
 
   const loadStats = async () => {
-    const { data } = await supabase
-      .from("tiny_customers_cache")
-      .select("telefone_normalizado, synced_at, source")
-      .eq("source", "bulk_sync");
-    if (!data) return;
-    const last = data.reduce<string | null>((acc, r: any) => {
-      if (!r.synced_at) return acc;
-      return !acc || r.synced_at > acc ? r.synced_at : acc;
-    }, null);
+    const [total, withPhone, noPhone, pending] = await Promise.all([
+      supabase.from("tiny_customers_cache").select("customer_id", { count: "exact", head: true }),
+      supabase.from("tiny_customers_cache").select("customer_id", { count: "exact", head: true }).not("telefone_normalizado", "is", null),
+      supabase.from("tiny_customers_cache").select("customer_id", { count: "exact", head: true }).eq("sem_telefone", true),
+      supabase.from("tiny_customers_cache").select("customer_id", { count: "exact", head: true })
+        .is("telefone_normalizado", null).eq("sem_telefone", false).not("tiny_contact_id", "is", null),
+    ]);
     setStats({
-      total: data.length,
-      with_phone: data.filter((r: any) => r.telefone_normalizado).length,
-      no_phone: data.filter((r: any) => !r.telefone_normalizado).length,
-      last_sync: last,
+      total: total.count ?? 0,
+      with_phone: withPhone.count ?? 0,
+      no_phone_flagged: noPhone.count ?? 0,
+      pending: pending.count ?? 0,
     });
   };
 
-  useEffect(() => {
-    loadStats();
-  }, []);
+  useEffect(() => { loadStats(); }, []);
 
-  const handleSync = async () => {
+  // Loop until pending=0 or no progress
+  const runUntilDone = async (mode: "auto" | "phones") => {
     setLoading(true);
-    const t = toast.loading("Sincronizando contatos com Tiny…");
+    const t = toast.loading("Sincronizando telefones…");
     try {
-      const { data, error } = await supabase.functions.invoke("sync-tiny-contacts", {
-        body: {},
-      });
-      if (error) throw error;
-      if (data?.status === "ok" || data?.status === "partial") {
-        toast.success(
-          `Sincronização ${data.status === "ok" ? "concluída" : "parcial"}`,
-          {
-            id: t,
-            description: `${data.synced} contatos · ${data.with_phone} com telefone · ${data.no_phone} sem telefone`,
-          },
-        );
+      let total = 0;
+      for (let i = 0; i < 40; i++) {
+        const { data, error } = await supabase.functions.invoke("sync-tiny-contacts", {
+          body: { mode: i === 0 ? mode : "phones", batch_size: 200 },
+        });
+        if (error) throw error;
+        total += data?.phones?.filled ?? 0;
+        const remaining = data?.remaining ?? 0;
+        setProgress(`Lote ${i + 1}: +${data?.phones?.filled ?? 0} telefones · restam ${remaining}`);
+        toast.loading(`Telefones obtidos: ${data?.with_phone ?? 0} · restam ${remaining}`, { id: t });
+        if (remaining === 0) break;
+        if ((data?.phones?.batch_processed ?? 0) === 0) break;
         await loadStats();
-      } else {
-        throw new Error(data?.error || "Resposta inesperada");
       }
+      await loadStats();
+      toast.success(`Concluído: +${total} telefones nesta execução`, { id: t });
+      setProgress("");
     } catch (e: any) {
       toast.error("Falha ao sincronizar", { id: t, description: String(e?.message ?? e) });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
+  };
+
+  const handleBulk = async () => {
+    setBulkLoading(true);
+    const t = toast.loading("Atualizando lista de contatos do Tiny…");
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-tiny-contacts", { body: { mode: "bulk" } });
+      if (error) throw error;
+      toast.success(`Lista atualizada: ${data?.bulk?.synced ?? 0} contatos`, { id: t });
+      await loadStats();
+    } catch (e: any) {
+      toast.error("Falha", { id: t, description: String(e?.message ?? e) });
+    } finally { setBulkLoading(false); }
   };
 
   return (
@@ -73,40 +84,31 @@ export const PhoneSyncCard = () => {
           Sincronização de Telefones
         </CardTitle>
         <CardDescription>
-          Sincroniza a base de contatos do Tiny ERP para enriquecer as exportações do BotConversa.
-          Executa automaticamente todo dia às 03:00.
+          A lista mestre vem de <code>contatos.pesquisa.php</code> (sem telefones).
+          Para obter o telefone real chamamos <code>contato.obter.php</code> por contato — feito em lotes.
+          Clique em "Preencher telefones" e aguarde até zerar os pendentes.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {stats && (
-          <div className="grid grid-cols-3 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
-            <div>
-              <div className="text-xs text-muted-foreground">No cache</div>
-              <div className="text-lg font-semibold">{stats.total.toLocaleString("pt-BR")}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Com telefone</div>
-              <div className="text-lg font-semibold text-green-600">
-                {stats.with_phone.toLocaleString("pt-BR")}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Sem telefone</div>
-              <div className="text-lg font-semibold text-muted-foreground">
-                {stats.no_phone.toLocaleString("pt-BR")}
-              </div>
-            </div>
+          <div className="grid grid-cols-4 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+            <div><div className="text-xs text-muted-foreground">No cache</div><div className="text-lg font-semibold">{stats.total.toLocaleString("pt-BR")}</div></div>
+            <div><div className="text-xs text-muted-foreground">Com telefone</div><div className="text-lg font-semibold text-green-600">{stats.with_phone.toLocaleString("pt-BR")}</div></div>
+            <div><div className="text-xs text-muted-foreground">Sem telefone (confirmado)</div><div className="text-lg font-semibold text-muted-foreground">{stats.no_phone_flagged.toLocaleString("pt-BR")}</div></div>
+            <div><div className="text-xs text-muted-foreground">Pendentes</div><div className="text-lg font-semibold text-orange-600">{stats.pending.toLocaleString("pt-BR")}</div></div>
           </div>
         )}
-        {stats?.last_sync && (
-          <p className="text-xs text-muted-foreground">
-            Última sincronização: {new Date(stats.last_sync).toLocaleString("pt-BR")}
-          </p>
-        )}
-        <Button onClick={handleSync} disabled={loading} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Sincronizando…" : "Sincronizar agora"}
-        </Button>
+        {progress && <p className="text-xs text-muted-foreground">{progress}</p>}
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => runUntilDone("auto")} disabled={loading || bulkLoading} className="gap-2">
+            <Zap className={`h-4 w-4 ${loading ? "animate-pulse" : ""}`} />
+            {loading ? "Preenchendo…" : "Preencher telefones (loop até zerar)"}
+          </Button>
+          <Button variant="outline" onClick={handleBulk} disabled={loading || bulkLoading} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${bulkLoading ? "animate-spin" : ""}`} />
+            Atualizar lista de contatos
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
