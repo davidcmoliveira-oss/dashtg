@@ -82,7 +82,7 @@ export const CrmtgFunnels = () => {
                 await saveTouch.mutateAsync({ funnel_id: id as string, ordem: i, dia_offset: off, botconversa_flow_id: "", mensagem_v1: "", mensagem_v2: "", mensagem_v3: "" });
               }
             }
-            setEditing({ ...f, id: id as string });
+            setEditing({ ...editing!, ...f, id: id as string } as CrmtgFunnel);
             toast.success("Funil salvo");
           }}
           onSaveTouch={async (t) => { await saveTouch.mutateAsync(t); toast.success("Toque salvo"); }}
