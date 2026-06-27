@@ -30,6 +30,7 @@ export const CrmtgRoot = ({ initialTab = "dashboard" }: Props) => {
         ))}
       </div>
       {tab === "dashboard" && <CrmtgDashboard/>}
+      {tab === "customers" && <CrmtgCustomers/>}
       {tab === "queue" && <CrmtgQueue/>}
       {tab === "funnels" && <CrmtgFunnels/>}
       {tab === "history" && <CrmtgHistory/>}
