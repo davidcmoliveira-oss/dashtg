@@ -160,6 +160,343 @@ export type Database = {
         }
         Relationships: []
       }
+      crmtg_customer_state: {
+        Row: {
+          customer_id: string
+          entrada_funnel_em: string | null
+          fase: string | null
+          funnel_atual_id: string | null
+          ultima_avaliacao_em: string | null
+          ultimo_pedido_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          customer_id: string
+          entrada_funnel_em?: string | null
+          fase?: string | null
+          funnel_atual_id?: string | null
+          ultima_avaliacao_em?: string | null
+          ultimo_pedido_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          customer_id?: string
+          entrada_funnel_em?: string | null
+          fase?: string | null
+          funnel_atual_id?: string | null
+          ultima_avaliacao_em?: string | null
+          ultimo_pedido_em?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crmtg_customer_state_funnel_atual_id_fkey"
+            columns: ["funnel_atual_id"]
+            isOneToOne: false
+            referencedRelation: "crmtg_funnels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crmtg_daily_queue: {
+        Row: {
+          botconversa_response: Json | null
+          created_at: string
+          customer_id: string
+          customer_name: string | null
+          enviado_em: string | null
+          flow_id: string | null
+          funnel_categoria: string | null
+          funnel_id: string | null
+          funnel_nome: string | null
+          horario_previsto: string
+          id: string
+          mensagem_versao: number
+          motivo_cancelamento: string | null
+          run_date: string
+          status: string
+          telefone_normalizado: string | null
+          texto_render: string | null
+          touch_id: string | null
+          touch_ordem: number | null
+        }
+        Insert: {
+          botconversa_response?: Json | null
+          created_at?: string
+          customer_id: string
+          customer_name?: string | null
+          enviado_em?: string | null
+          flow_id?: string | null
+          funnel_categoria?: string | null
+          funnel_id?: string | null
+          funnel_nome?: string | null
+          horario_previsto: string
+          id?: string
+          mensagem_versao?: number
+          motivo_cancelamento?: string | null
+          run_date: string
+          status?: string
+          telefone_normalizado?: string | null
+          texto_render?: string | null
+          touch_id?: string | null
+          touch_ordem?: number | null
+        }
+        Update: {
+          botconversa_response?: Json | null
+          created_at?: string
+          customer_id?: string
+          customer_name?: string | null
+          enviado_em?: string | null
+          flow_id?: string | null
+          funnel_categoria?: string | null
+          funnel_id?: string | null
+          funnel_nome?: string | null
+          horario_previsto?: string
+          id?: string
+          mensagem_versao?: number
+          motivo_cancelamento?: string | null
+          run_date?: string
+          status?: string
+          telefone_normalizado?: string | null
+          texto_render?: string | null
+          touch_id?: string | null
+          touch_ordem?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crmtg_daily_queue_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "crmtg_funnels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crmtg_daily_queue_touch_id_fkey"
+            columns: ["touch_id"]
+            isOneToOne: false
+            referencedRelation: "crmtg_funnel_touches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crmtg_daily_run_log: {
+        Row: {
+          alertas: Json
+          elegiveis: number
+          fila_criada: number
+          finalizado_em: string | null
+          iniciado_em: string
+          run_date: string
+          status: string
+        }
+        Insert: {
+          alertas?: Json
+          elegiveis?: number
+          fila_criada?: number
+          finalizado_em?: string | null
+          iniciado_em?: string
+          run_date: string
+          status?: string
+        }
+        Update: {
+          alertas?: Json
+          elegiveis?: number
+          fila_criada?: number
+          finalizado_em?: string | null
+          iniciado_em?: string
+          run_date?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      crmtg_funnel_touches: {
+        Row: {
+          botconversa_flow_id: string | null
+          created_at: string
+          dia_offset: number
+          funnel_id: string
+          id: string
+          mensagem_v1: string
+          mensagem_v2: string
+          mensagem_v3: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          botconversa_flow_id?: string | null
+          created_at?: string
+          dia_offset: number
+          funnel_id: string
+          id?: string
+          mensagem_v1?: string
+          mensagem_v2?: string
+          mensagem_v3?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          botconversa_flow_id?: string | null
+          created_at?: string
+          dia_offset?: number
+          funnel_id?: string
+          id?: string
+          mensagem_v1?: string
+          mensagem_v2?: string
+          mensagem_v3?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crmtg_funnel_touches_funnel_id_fkey"
+            columns: ["funnel_id"]
+            isOneToOne: false
+            referencedRelation: "crmtg_funnels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crmtg_funnels: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          created_at: string
+          id: string
+          nome: string
+          observacoes: string | null
+          prioridade: number
+          produtos_gatilho: string[]
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          categoria: string
+          created_at?: string
+          id?: string
+          nome: string
+          observacoes?: string | null
+          prioridade?: number
+          produtos_gatilho?: string[]
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          prioridade?: number
+          produtos_gatilho?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      crmtg_history: {
+        Row: {
+          created_at: string
+          customer_id: string
+          customer_name: string | null
+          enviado_em: string | null
+          flow_id: string | null
+          funnel_categoria: string | null
+          funnel_id: string | null
+          funnel_nome: string | null
+          id: string
+          mensagem_versao: number | null
+          motivo_cancelamento: string | null
+          queue_id: string | null
+          run_date: string
+          status: string
+          telefone_normalizado: string | null
+          texto_enviado: string | null
+          touch_ordem: number | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          customer_name?: string | null
+          enviado_em?: string | null
+          flow_id?: string | null
+          funnel_categoria?: string | null
+          funnel_id?: string | null
+          funnel_nome?: string | null
+          id?: string
+          mensagem_versao?: number | null
+          motivo_cancelamento?: string | null
+          queue_id?: string | null
+          run_date: string
+          status: string
+          telefone_normalizado?: string | null
+          texto_enviado?: string | null
+          touch_ordem?: number | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          customer_name?: string | null
+          enviado_em?: string | null
+          flow_id?: string | null
+          funnel_categoria?: string | null
+          funnel_id?: string | null
+          funnel_nome?: string | null
+          id?: string
+          mensagem_versao?: number | null
+          motivo_cancelamento?: string | null
+          queue_id?: string | null
+          run_date?: string
+          status?: string
+          telefone_normalizado?: string | null
+          texto_enviado?: string | null
+          touch_ordem?: number | null
+        }
+        Relationships: []
+      }
+      crmtg_settings: {
+        Row: {
+          horario_fim: string
+          horario_inicio: string
+          id: boolean
+          intervalo_max_lote: number
+          intervalo_max_msg: number
+          intervalo_min_lote: number
+          intervalo_min_msg: number
+          lote_tamanho: number
+          sistema_pausado: boolean
+          ultima_execucao_diaria: string | null
+          ultimo_alerta_tiny: string | null
+          updated_at: string
+        }
+        Insert: {
+          horario_fim?: string
+          horario_inicio?: string
+          id?: boolean
+          intervalo_max_lote?: number
+          intervalo_max_msg?: number
+          intervalo_min_lote?: number
+          intervalo_min_msg?: number
+          lote_tamanho?: number
+          sistema_pausado?: boolean
+          ultima_execucao_diaria?: string | null
+          ultimo_alerta_tiny?: string | null
+          updated_at?: string
+        }
+        Update: {
+          horario_fim?: string
+          horario_inicio?: string
+          id?: boolean
+          intervalo_max_lote?: number
+          intervalo_max_msg?: number
+          intervalo_min_lote?: number
+          intervalo_min_msg?: number
+          lote_tamanho?: number
+          sistema_pausado?: boolean
+          ultima_execucao_diaria?: string | null
+          ultimo_alerta_tiny?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tiny_customers_cache: {
         Row: {
           celular: string | null
