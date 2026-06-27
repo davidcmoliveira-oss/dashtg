@@ -140,6 +140,10 @@ const Index = () => {
       );
     }
 
+    if (activeItem.startsWith("crmtg:")) {
+      return <CrmtgRoot initialTab={activeItem.split(":")[1] || "dashboard"} key={activeItem}/>;
+    }
+
     switch (activeItem) {
       case "webhooks":
         return (
