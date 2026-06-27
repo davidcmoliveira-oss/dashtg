@@ -107,6 +107,11 @@ Deno.serve(async (req) => {
     }
 
     // 5) Roteamento + fila
+    // Lê estado atual para preservar entrada_funnel_em (hoje = dia 0 na 1ª vez)
+    const { data: statesRaw } = await supa.from("crmtg_customer_state").select("customer_id, funnel_atual_id, entrada_funnel_em");
+    const stateMap = new Map<string, { funnel_atual_id: string | null; entrada_funnel_em: string | null }>();
+    for (const s of statesRaw || []) stateMap.set(s.customer_id, { funnel_atual_id: s.funnel_atual_id, entrada_funnel_em: s.entrada_funnel_em });
+
     const queueRows: any[] = [];
     const alertas: any[] = [];
     let elegiveis = 0;
@@ -122,10 +127,24 @@ Deno.serve(async (req) => {
       const r = routeCustomer(snap, funnels);
       if (!r.funnel) continue;
 
-      // toques cujo dia_offset bate hoje
-      const entradaDate = r.entrada_em;
+      // entrada_em = hoje na 1ª vez nesse funil; preserva data anterior se já estava
+      const prevState = stateMap.get(snap.customer_id);
+      const sameFunnel = prevState?.funnel_atual_id === r.funnel.id;
+      const entradaDate = sameFunnel && prevState?.entrada_funnel_em ? prevState.entrada_funnel_em : runDate;
+
       const offsetHoje = diffDays(entradaDate);
       const touchesHoje = r.funnel.touches.filter(t => t.dia_offset === offsetHoje);
+
+      // upsert state mesmo sem toque hoje (para fixar entrada_em)
+      await supa.from("crmtg_customer_state").upsert({
+        customer_id: snap.customer_id,
+        fase: r.funnel.categoria,
+        funnel_atual_id: r.funnel.id,
+        entrada_funnel_em: entradaDate,
+        ultimo_pedido_em: snap.last_order_date,
+        ultima_avaliacao_em: new Date().toISOString(),
+      });
+
       if (touchesHoje.length === 0) continue;
       elegiveis++;
 
@@ -149,20 +168,11 @@ Deno.serve(async (req) => {
           flow_id: t.botconversa_flow_id,
           mensagem_versao: pick.versao,
           texto_render: pick.texto,
-          status: "pending",
+          status: snap.telefone_normalizado ? "pending" : "blocked_no_phone",
+          motivo_cancelamento: snap.telefone_normalizado ? null : "aguardando enriquecimento de telefone",
         });
         idx++;
       }
-
-      // upsert state
-      await supa.from("crmtg_customer_state").upsert({
-        customer_id: snap.customer_id,
-        fase: r.funnel.categoria,
-        funnel_atual_id: r.funnel.id,
-        entrada_funnel_em: entradaDate,
-        ultimo_pedido_em: snap.last_order_date,
-        ultima_avaliacao_em: new Date().toISOString(),
-      });
     }
 
     // limpa fila pending antiga deste dia
