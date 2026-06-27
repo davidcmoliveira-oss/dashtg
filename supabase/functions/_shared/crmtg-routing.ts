@@ -43,9 +43,9 @@ export function routeCustomer(c: CustomerSnapshot, funnels: Funnel[]): RouteResu
   if (!c.customer_id || CONSUMIDOR_FINAL_REGEX.test(c.customer_id)) {
     return { funnel: null, motivo: "consumidor final ignorado", entrada_em: c.last_order_date };
   }
-  if (!c.telefone_normalizado) {
-    return { funnel: null, motivo: "sem telefone", entrada_em: c.last_order_date };
-  }
+  // Sem telefone não bloqueia roteamento — o sender filtra antes do disparo.
+  // Isso garante que a fila/painel mostre todos os elegíveis enquanto o
+  // enriquecimento de telefones roda em paralelo.
 
   const ativos = funnels.filter(f => f.ativo).sort((a,b) => a.prioridade - b.prioridade);
 

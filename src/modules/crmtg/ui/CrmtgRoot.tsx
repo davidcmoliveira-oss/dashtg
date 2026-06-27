@@ -4,9 +4,11 @@ import { CrmtgQueue } from "./CrmtgQueue";
 import { CrmtgFunnels } from "./CrmtgFunnels";
 import { CrmtgHistory } from "./CrmtgHistory";
 import { CrmtgSettings } from "./CrmtgSettings";
+import { CrmtgCustomers } from "./CrmtgCustomers";
 
 const TABS = [
   { id: "dashboard", label: "Painel Inicial" },
+  { id: "customers", label: "Clientes" },
   { id: "queue", label: "Fila do Dia" },
   { id: "funnels", label: "Funis" },
   { id: "history", label: "Histórico" },
@@ -28,6 +30,7 @@ export const CrmtgRoot = ({ initialTab = "dashboard" }: Props) => {
         ))}
       </div>
       {tab === "dashboard" && <CrmtgDashboard/>}
+      {tab === "customers" && <CrmtgCustomers/>}
       {tab === "queue" && <CrmtgQueue/>}
       {tab === "funnels" && <CrmtgFunnels/>}
       {tab === "history" && <CrmtgHistory/>}
