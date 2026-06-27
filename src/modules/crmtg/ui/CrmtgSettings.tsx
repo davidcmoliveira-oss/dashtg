@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 export const CrmtgSettings = () => {
-  const { data, update } = useCrmtgSettings();
+  const { data, isLoading, error, update } = useCrmtgSettings();
   const [form, setForm] = useState<any>({});
   useEffect(() => { if (data) setForm(data); }, [data]);
 
@@ -17,7 +17,9 @@ export const CrmtgSettings = () => {
     catch (e: any) { toast.error(e.message); }
   };
 
-  if (!data) return <div>Carregando…</div>;
+  if (isLoading) return <div className="text-muted-foreground">Carregando configurações…</div>;
+  if (error) return <div className="text-destructive">Erro: {String((error as Error).message)}</div>;
+  if (!data) return <div className="text-muted-foreground">Nenhuma configuração encontrada. Recarregue a página.</div>;
 
   return (
     <div className="max-w-2xl space-y-4">
