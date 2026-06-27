@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
     }
 
     // limpa fila pending antiga deste dia
-    await supa.from("crmtg_daily_queue").delete().eq("run_date", runDate).eq("status", "pending");
+    await supa.from("crmtg_daily_queue").delete().eq("run_date", runDate).in("status", ["pending", "blocked_no_phone"]);
     let inserted = 0;
     for (let i = 0; i < queueRows.length; i += 500) {
       const chunk = queueRows.slice(i, i + 500);
