@@ -56,9 +56,19 @@ Deno.serve(async (req) => {
         .map(t => ({ id: t.id, ordem: t.ordem, dia_offset: t.dia_offset, botconversa_flow_id: t.botconversa_flow_id, mensagem_v1: t.mensagem_v1, mensagem_v2: t.mensagem_v2, mensagem_v3: t.mensagem_v3 })),
     }));
 
-    // 4) Snapshot de clientes: agregação de pedidos (somente nome != consumidor final)
-    const { data: orders } = await supa.from("tiny_orders_cache").select("nome, data_pedido, situacao, tiny_order_id");
-    const validOrders = (orders || []).filter(o => o.nome && !/consumidor\s*final/i.test(o.nome));
+    // 4) Snapshot de clientes: agregação de pedidos (paginado, supera limite 1000)
+    const validOrders: any[] = [];
+    const PAGE = 1000;
+    for (let off = 0; ; off += PAGE) {
+      const { data: chunk, error: oerr } = await supa
+        .from("tiny_orders_cache")
+        .select("nome, data_pedido, situacao, tiny_order_id")
+        .range(off, off + PAGE - 1);
+      if (oerr) throw oerr;
+      if (!chunk || chunk.length === 0) break;
+      for (const o of chunk) if (o.nome && !/consumidor\s*final/i.test(o.nome)) validOrders.push(o);
+      if (chunk.length < PAGE) break;
+    }
 
     // último pedido por cliente
     const lastByCust = new Map<string, { date: string; tiny_order_id: number }>();
