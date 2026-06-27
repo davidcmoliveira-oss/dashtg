@@ -1,133 +1,103 @@
-## Escopo
+# Plano — Módulo CRM TG (CRM de Recompra)
 
-Sem alterar layout, lógica, filtros ou dados existentes das telas afetadas. Apenas:
-1. Botão "Exportar para BotConversa" em 4 relatórios.
-2. Modal 2-passos (seleção de clientes → etiqueta) e geração de `.xlsx`.
-3. Novas colunas e filtros no Ranking de Clientes.
-4. Cache de telefones com enriquecimento a partir do `raw_json` já salvo.
+Módulo 100% isolado. Nenhuma tela existente é alterada — apenas adição de um item recolhível no Sidebar e ampliação não-destrutiva da lista de Clientes (colunas/filtros opcionais).
+
+Único segredo solicitado no início: `BOTCONVERSA_API_KEY`.
 
 ---
 
-## 1. Cache de telefones
+## 1. Banco de dados (novas tabelas, prefixo `crmtg_`)
 
-Nova tabela `public.tiny_customers_cache`:
-- `customer_id text PK` (mesmo id usado em `CustomerData.customer_id`)
-- `nome text`
-- `fone text`, `celular text`
-- `telefone_normalizado text` (DDI 55 + DDD + número, só dígitos)
-- `sem_telefone boolean default false` (marca quando o raw_json não tinha número, evita reprocessar)
-- `source text` ("raw_json" | "api")
-- `created_at`, `updated_at` + trigger updated_at
-- RLS: leitura pública (segue padrão das outras tabelas de cache); INSERT/UPDATE apenas via `service_role`
-- GRANTs para `anon`, `authenticated`, `service_role`
+Reaproveita `tiny_orders_cache`, `tiny_order_details_cache`, `tiny_customers_cache`, `tiny_products_cache` como fonte de verdade. Nada é duplicado.
 
-### Edge function `enrich-customer-phones`
-- Recebe `{ customer_ids: string[] }`.
-- Para cada id ainda não em cache: lê todos os `tiny_orders_cache.raw_json` desse cliente, extrai `cliente.celular` ou `cliente.fone` (prioridade celular). Normaliza para `55DDDNNNNNNNN` (remove não-dígitos, adiciona 55 quando faltar, evita duplicar).
-- Sem telefone no raw_json → marca `sem_telefone = true`.
-- Faz upsert em `tiny_customers_cache`.
-- Retorna `{ phones: Record<customer_id, string | null> }`.
-- CORS + validação Zod.
+- `crmtg_settings` (singleton) — sistema_pausado, horário_inicio (default 09:00), horário_fim (20:00), tz fixo America/Sao_Paulo, lote_tamanho, intervalo_min_msg, intervalo_max_msg, intervalo_min_lote, intervalo_max_lote, última_execução_diária.
+- `crmtg_funnels` — id, nome, categoria (`reativacao|suplementacao|granel|generico`), prioridade (int), ativo, produtos_gatilho (text[] de SKUs), observacoes.
+- `crmtg_funnel_touches` — funnel_id, ordem, dia_offset (int), botconversa_flow_id, mensagem_v1, mensagem_v2, mensagem_v3.
+- `crmtg_customer_state` — customer_id PK, fase, funnel_atual_id, entrada_funnel_em (date), ultimo_pedido_em, ultima_avaliacao_em.
+- `crmtg_daily_queue` — id, run_date, customer_id, telefone_normalizado, funnel_id, touch_id, horario_previsto, flow_id, mensagem_escolhida (1/2/3), texto_render, status (`pending|sent|cancelled|failed`), motivo_cancelamento, enviado_em, botconversa_response.
+- `crmtg_history` — espelho imutável dos disparos (mesmos campos + categoria/funil/toque snapshot).
+- `crmtg_daily_run_log` — run_date PK, iniciado_em, finalizado_em, elegiveis, fila_criada, alertas jsonb.
 
-> Observação: o `raw_json` atual visto em `tiny_orders_cache` só traz `pedido` resumido (sem `cliente`). Os dados completos do cliente vêm em `tiny_order_details_cache.raw_json` (quando `cliente` foi incluído no enriquecimento). A função tentará ambos. Se nem o details cache tiver `cliente`, marcará `sem_telefone = true` — esse cliente aparecerá no modal com aviso "sem telefone" e será ignorado na exportação (como pede a especificação).
+Todas com GRANT padrão (authenticated + service_role; sem anon) + RLS habilitado com policy permissiva para `authenticated` (segue padrão do projeto).
 
 ---
 
-## 2. Componente de exportação reutilizável
+## 2. Edge Functions (novas, prefixo `crmtg-`)
 
-`src/components/dashboard/botconversa/BotConversaExportButton.tsx`
-- Props: `reportSlug: string` (ex: `top-reativacao`), `customers: { customer_id: string; customer_name: string }[]`, `disabled?: boolean`.
-- Botão `outline` + ícone `Download`/`FileSpreadsheet`, tooltip "Nenhum cliente disponível para exportar" quando lista vazia.
-- Abre `BotConversaExportDialog`.
+- `crmtg-daily-build` — roda **1x/dia** via pg_cron (08:30 BRT). Valida frescor do Tiny (último pedido < 24h olhando `tiny_orders_cache.fetched_at`); se falhar, marca alerta e NÃO monta fila. Caso ok: itera clientes ativos com telefone, aplica roteamento (Reativação → Suplementação → Granel → Genérico, para no primeiro match), calcula quais toques caem em `today` baseado em `entrada_funnel_em + dia_offset`, grava `crmtg_daily_queue` com horários distribuídos entre 09:00–20:00, escolhe aleatoriamente v1/v2/v3 por linha.
+- `crmtg-sender` — roda a cada 5 min via pg_cron dentro da janela. Lê próximos itens `pending` cujo `horario_previsto <= now()`, processa em lotes pequenos (default 5), com sleep aleatório entre mensagens (default 8–25s) e entre lotes (60–180s). Chama BotConversa API (`/subscribers` + trigger flow) usando `BOTCONVERSA_API_KEY`. Respeita `sistema_pausado`. Aplica limite 1 msg/cliente/dia. Grava histórico.
+- `crmtg-router` — função compartilhada (helpers em `_shared/crmtg-routing.ts`) usada por `daily-build` e pelo simulador.
+- `crmtg-simulate` — executa router em dry-run e devolve lista de clientes + motivo, sem gravar.
+- `crmtg-reset-on-purchase` — trigger SQL em `tiny_orders_cache` AFTER INSERT/UPDATE: zera `crmtg_customer_state` do cliente e cancela linhas `pending` da fila do dia (motivo: "nova compra").
+- `crmtg-ai-messages` — gera 3 versões via Lovable AI Gateway (`google/gemini-3-flash-preview`) com prompt fixo (tom Ju da Tangerina, pt-BR, emojis).
 
-`BotConversaExportDialog.tsx` (shadcn `Dialog`, 2 passos internos):
-
-**Passo 1 — Seleção**
-- Ao abrir, chama `enrich-customer-phones` com os ids → loading "Buscando telefones…".
-- Lista com checkbox por cliente: nome + telefone formatado, ou badge "sem telefone" (cinza, checkbox desabilitado opcional? Não — permite marcar mas será ignorado, conforme spec).
-- "Selecionar todos" / "Desmarcar todos" / contador "X contatos selecionados".
-- `max-height` com `overflow-y: auto`.
-- Botão "Continuar →" desabilitado quando 0 selecionados.
-
-**Passo 2 — Etiqueta**
-- Input opcional, placeholder `Ex: reativacao_maio`, contador, regra "Máx 20 chars por etiqueta; separe por vírgula".
-- Validação: cada item separado por vírgula `.trim()` ≤ 20 chars.
-- Botões "← Voltar" e "Exportar arquivo" (spinner durante geração).
-- Foco inicial no input.
-
-### Geração XLSX
-- Adicionar dependência `xlsx` (SheetJS).
-- Helper `buildBotConversaXlsx(selected, etiqueta, reportSlug)`:
-  - Cabeçalho `Primeiro nome | Sobrenome | Telefone | Etiquetas`.
-  - Split nome no primeiro espaço.
-  - Filtra clientes sem telefone (ignorados).
-  - Download via `XLSX.writeFile` com `botconversa_<slug>_<ddmmyyyy>.xlsx`.
-- Toast: `Arquivo exportado com sucesso — X contatos` (+ `· Y ignorados por ausência de telefone` quando aplicável). Erro → toast vermelho.
+Cron jobs (pg_cron + pg_net):
+- `crmtg-daily-build` 08:30 BRT (11:30 UTC).
+- `crmtg-sender` */5 min entre 12:00–23:00 UTC (≈09–20 BRT).
 
 ---
 
-## 3. Integração nos 4 relatórios (apenas adicionar botão no header)
+## 3. Frontend — submenu recolhível em `Sidebar.tsx`
 
-| Arquivo | Onde | reportSlug | Dataset passado |
-|---|---|---|---|
-| `src/components/dashboard/reports/InactiveCustomersReport.tsx` | header do bloco "Top clientes para reativação" (linha do `<h3>` + botão "Limpar filtro") | `top-reativacao` | `filtered` (respeita filtro de faixa) |
-| `src/components/dashboard/reports/RepurchaseReport.tsx` | header "Top 10 clientes recompradores" | `top-recompradores` | **todos** `data.top_repurchasers` mapeados a customers (precisa expor `customer_id` — hoje só tem `name`/`orders`/`spend`; ver ajuste em `useReportsAnalytics`) |
-| `src/components/dashboard/reports/CustomerTrendsReport.tsx` | header "Maiores mudanças de comportamento" | `mudancas-comportamento` | `filtered` (com filtro e ordenação atuais) |
-| `src/components/dashboard/CustomersListView.tsx` | header da tabela Ranking de Clientes (mesma linha do search/sort) | `ranking-clientes` | `filteredCustomers` (após search + novos filtros) |
+Adicionar 1 item raiz **CRM TG** (ícone `MessageCircle`) que expande:
+- Painel Inicial
+- Fila do Dia
+- Funis
+- Histórico
+- Configurações
 
-Ajustes mínimos em `useReportsAnalytics.ts`:
-- `RepurchaseStats.top_repurchasers` → incluir `customer_id` (já existe internamente).
+Roteamento via `activeItem` em `pages/Index.tsx` (mesmo padrão atual, sem react-router novo). Todas as telas ficam em `src/modules/crmtg/ui/`:
 
-Sem mexer em nenhum outro comportamento, layout, gráfico ou filtro.
+- `CrmtgDashboard.tsx` — cards (clientes por fase, por funil, entradas hoje, inelegíveis, programadas, enviadas, canceladas, status sender + ETA), alertas (pausa, Tiny desatualizado, falhas BotConversa, sem telefone), 3 gráficos (recharts já no projeto).
+- `CrmtgQueue.tsx` — tabela paginada da fila do dia + filtros (data/funil/status/cliente).
+- `CrmtgFunnels.tsx` — lista de funis + editor (drawer/dialog shadcn) com toques editáveis (adicionar/excluir/reordenar via dnd simples), botão "Gerar Mensagens IA" por toque, botão **Simular**.
+- `CrmtgHistory.tsx` — tabela paginada com todos os filtros do brief.
+- `CrmtgSettings.tsx` — toggle pausar/reativar, inputs horário início/fim, parâmetros de ritmo, status API BotConversa (ping).
 
----
+Hooks em `src/modules/crmtg/api/` (padrão de `modules/automations`): `useCrmtgFunnels`, `useCrmtgQueue`, `useCrmtgHistory`, `useCrmtgSettings`, `useCrmtgDashboard`, `useCrmtgSimulate`, `useGenerateAiMessages`.
 
-## 4. Ranking de Clientes — colunas e filtros novos
-
-Em `CustomersListView.tsx` (apenas extensão; nenhum filtro/coluna existente é removido):
-
-### Colunas adicionadas
-- **Última compra (dias)** — usa `customer.days_since_last_purchase` (já existe).
-- **Média entre compras (dias)** — usa `customer.avg_days_between_purchases` (já existe); exibe `—` se `total_orders < 2` ou valor `0`.
-
-### Filtros adicionados (acima da tabela, em uma faixa nova)
-- "Dias desde última compra": dois `Input type="number"` (`De:` / `Até:`).
-- "Média de dias entre compras": dois `Input type="number"` (`De:` / `Até:`).
-- Combina com `search` existente em `filteredCustomers` (apenas estendendo o `.filter()`).
-- Clientes com `avg_days_between_purchases = 0` são incluídos somente quando o range "Média entre compras" estiver vazio.
+Reutilização explícita:
+- `BotConversaExportDialog` / `buildBotConversaXlsx` — padrão de normalização de telefone via `tiny_customers_cache`.
+- `AiInsightsPanel` / `ai-insights` edge function — base para o gerador IA.
+- Componentes shadcn já instalados (Dialog, Tabs, Table, Switch, Select, Card).
+- Padrão visual: cor primária já é #F26522, fundo branco; fonte Poppins será adicionada em `index.html` + `tailwind.config.ts` (já há Inter — só adiciona família, não remove).
 
 ---
 
-## 5. Detalhes técnicos
+## 4. Ampliação da tela de Clientes (não-destrutiva)
 
-- **Telefone normalizado** (helper `normalizePhoneBR`):
-  ```
-  digits = phone.replace(/\D/g,'')
-  if digits.startsWith('55') && digits.length >= 12 → digits
-  else if digits.length in [10,11] → '55' + digits
-  else → null  // inválido
-  ```
-- **Split nome**: `const [first, ...rest] = nome.trim().split(/\s+/); sobrenome = rest.join(' ')`.
-- **xlsx**: `bun add xlsx`. Browser-only, sem dependência de servidor para a geração.
-- **Edge function**: registrada automaticamente; sem alteração em `config.toml`.
-- **RLS/GRANT** da nova tabela seguem o padrão dos outros caches (`public read`, escrita via service_role).
+Em `CustomersListView.tsx`: adicionar colunas opcionais (telefone, fase, funil atual) e filtros (funil, fase, recebeu mensagem em período) **somente quando o módulo CRM TG está habilitado** — toggle no `crmtg_settings`. Sem mexer em colunas/filtros existentes. Drawer de detalhe do cliente ganha aba "CRM TG" com histórico de funis e mensagens enviadas (consulta `crmtg_history`).
 
 ---
 
-## 6. Diagrama do fluxo
+## 5. Roteamento (ordem obrigatória)
 
-```text
-[Botão] → Dialog
-  ├─ Passo 1: fetch enrich-customer-phones(ids) → checkbox list
-  │            └─ Continuar (≥1 selecionado)
-  └─ Passo 2: input etiqueta (opcional, ≤20 por item)
-               └─ Exportar → XLSX.writeFile → toast → fecha
-```
+1. `days_since_last_purchase >= 45` → Reativação (toques 0,3,7,10,14).
+2. Último pedido contém SKU em `produtos_gatilho` de algum funil **Suplementação** ativo → entra nesse funil (0 = data do pedido; toques 20,25,28,30).
+3. Idem para **Granel** (toques 7,10,13).
+4. Caso contrário → **Genérico** (toques 1,3,7,10,14,17,21,25,28).
+
+Para por categoria com maior prioridade configurada. Cliente sem telefone normalizado ou "Consumidor Final" → ignorado silenciosamente.
 
 ---
 
-## 7. Fora do escopo
+## 6. Anti-bloqueio & ritmo humanizado
 
-- Não altera nenhum gráfico, KPI, lógica de cálculo, navegação ou filtros existentes.
-- Não toca em `automation-*`, dashboards de vendas, produtos ou tela de detalhes do cliente.
-- Não muda layout das telas — apenas adiciona o botão no header dos blocos indicados, as novas colunas/filtros no Ranking, e a nova tabela/edge function.
+- 3 versões obrigatórias por toque (validação no editor).
+- `daily-build` sorteia versão por linha (distribuição balanceada via módulo do índice).
+- `sender` processa em lotes de N (config), sleep aleatório entre msgs e entre lotes; nunca passa do horário fim. Mensagens não enviadas até o fim do dia são marcadas `cancelled` com motivo "fora da janela" e ignoradas (não acumulam).
+
+---
+
+## 7. Segredo
+
+No início da implementação, após aprovação do plano: solicitar `BOTCONVERSA_API_KEY` via `add_secret`. Nenhum outro segredo necessário (Tiny e Lovable AI já estão configurados).
+
+---
+
+## 8. Fora de escopo
+
+- Não altera nenhuma tela/edge function existente (exceto adição de itens no Sidebar e colunas/filtros opcionais em CustomersListView).
+- Não duplica cache do Tiny.
+- Não cria sistema independente de webhooks — usa BotConversa apenas como disparador.
+- Não toca em `automation-engine` (sistema atual de automações genéricas permanece intacto).
