@@ -188,6 +188,28 @@ export const useDashboardData = () => {
       }
       setProductCache(productMap);
       addLog(`Carregados ${productMap.size} produtos do cache`);
+
+      // Load phones (nome_normalizado -> telefone_normalizado)
+      const phoneMap = new Map<string, string>();
+      let phPage = 0;
+      while (true) {
+        const phFrom = phPage * PAGE_SIZE;
+        const phTo = phFrom + PAGE_SIZE - 1;
+        const { data: phChunk, error: phErr } = await supabase
+          .from('tiny_customers_cache')
+          .select('nome_normalizado, telefone_normalizado')
+          .not('telefone_normalizado', 'is', null)
+          .range(phFrom, phTo);
+        if (phErr) { console.error('Phone cache error:', phErr.message); break; }
+        if (!phChunk || phChunk.length === 0) break;
+        phChunk.forEach((p: any) => {
+          if (p.nome_normalizado && p.telefone_normalizado) phoneMap.set(p.nome_normalizado, p.telefone_normalizado);
+        });
+        if (phChunk.length < PAGE_SIZE) break;
+        phPage++;
+      }
+      setPhoneCache(phoneMap);
+      addLog(`Carregados ${phoneMap.size} telefones do cache`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar cache';
       setError(message);
