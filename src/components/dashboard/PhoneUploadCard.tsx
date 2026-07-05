@@ -174,7 +174,7 @@ export const PhoneUploadCard = () => {
         {stats && (
           <div className="grid grid-cols-3 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
             <div>
-              <div className="text-xs text-muted-foreground">No cache</div>
+              <div className="text-xs text-muted-foreground">Clientes cadastrados</div>
               <div className="text-lg font-semibold">{stats.total.toLocaleString("pt-BR")}</div>
             </div>
             <div>
