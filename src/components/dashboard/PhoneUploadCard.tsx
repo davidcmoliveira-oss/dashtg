@@ -98,13 +98,14 @@ export const PhoneUploadCard = () => {
 
       // Update em série por customer_id (a coluna telefone_normalizado é o alvo real)
       let updated = 0;
+      let firstError: string | null = null;
       const nowIso = new Date().toISOString();
       const UP_CHUNK = 50;
       for (let i = 0; i < targets.length; i += UP_CHUNK) {
         const slice = targets.slice(i, i + UP_CHUNK);
-        await Promise.all(slice.map(async (t) => {
-          const src = idToPhone.get(t.tiny_contact_id)!;
-          const { error } = await supabase
+        await Promise.all(slice.map(async (tg) => {
+          const src = idToPhone.get(tg.tiny_contact_id)!;
+          const { data, error } = await supabase
             .from("tiny_customers_cache")
             .update({
               telefone_normalizado: src.tel,
@@ -115,10 +116,22 @@ export const PhoneUploadCard = () => {
               source: "xlsx_upload",
               synced_at: nowIso,
             })
-            .eq("customer_id", t.customer_id)
-            .is("telefone_normalizado", null); // segurança extra
-          if (!error) updated++;
+            .eq("customer_id", tg.customer_id)
+            .is("telefone_normalizado", null)
+            .select("customer_id");
+          if (error) {
+            if (!firstError) firstError = error.message;
+            console.error("update falhou", tg.customer_id, error);
+          } else if (data && data.length > 0) {
+            updated++;
+          }
         }));
+      }
+
+      if (firstError && updated === 0) {
+        toast.error("Nenhum telefone foi gravado", { id: t, description: firstError });
+        setResult({ read: rows.length, matched: foundIds.size, updated: 0, skipped_had_phone: skippedHadPhone, no_match: noMatch, no_phone_in_sheet: noPhoneInSheet });
+        return;
       }
 
       const res: UploadResult = {
@@ -153,15 +166,15 @@ export const PhoneUploadCard = () => {
         </CardTitle>
         <CardDescription>
           Faça upload do arquivo <code>contatos.xlsx</code> exportado do Tiny.
-          O sistema lê a coluna <b>ID</b> e preenche o telefone apenas dos clientes que ainda estão sem número —
-          quem já tem telefone é ignorado.
+          O sistema lê a coluna <b>ID</b> e grava o telefone direto no cadastro de cada cliente no banco —
+          apenas para quem ainda está sem número. Quem já tem telefone é ignorado.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {stats && (
           <div className="grid grid-cols-3 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
             <div>
-              <div className="text-xs text-muted-foreground">No cache</div>
+              <div className="text-xs text-muted-foreground">Clientes cadastrados</div>
               <div className="text-lg font-semibold">{stats.total.toLocaleString("pt-BR")}</div>
             </div>
             <div>
@@ -202,10 +215,10 @@ export const PhoneUploadCard = () => {
               <FileSpreadsheet className="h-4 w-4" /> Resultado do último upload
             </div>
             <div>Linhas lidas: <b>{result.read.toLocaleString("pt-BR")}</b></div>
-            <div>Clientes encontrados no cache: <b>{result.matched.toLocaleString("pt-BR")}</b></div>
+            <div>Clientes encontrados no cadastro: <b>{result.matched.toLocaleString("pt-BR")}</b></div>
             <div className="text-green-600">Telefones preenchidos: <b>{result.updated.toLocaleString("pt-BR")}</b></div>
             <div className="text-muted-foreground">Ignorados (já tinham telefone): {result.skipped_had_phone.toLocaleString("pt-BR")}</div>
-            <div className="text-muted-foreground">IDs sem match no cache: {result.no_match.toLocaleString("pt-BR")}</div>
+            <div className="text-muted-foreground">IDs sem match no cadastro: {result.no_match.toLocaleString("pt-BR")}</div>
             <div className="text-muted-foreground">Linhas sem telefone na planilha: {result.no_phone_in_sheet.toLocaleString("pt-BR")}</div>
           </div>
         )}

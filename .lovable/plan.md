@@ -1,46 +1,45 @@
-## O que entendi
-- Você fará upload manual da planilha `contatos.xlsx` (mesmo modelo) todos os dias no dashboard.
-- O sistema lê o XLSX no navegador, normaliza e atualiza **apenas** clientes com `telefone_normalizado` em branco (ignora quem já tem).
-- Remover todo o fluxo antigo de sync de telefones via API Tiny (botões, cards, edge function).
-- Exibir o telefone na tela de **Clientes do Dashboard** (lista e detalhe).
+## Causa raiz encontrada
 
-## Verificação já feita
-Cruzei 3 IDs da planilha com o banco — match 100% via `ID` (planilha) ↔ `tiny_contact_id` (DB). Dos 500 registros da planilha, 481 têm Celular/Fone.
+Rodei duas queries no banco:
 
-## Plano
+- **Nenhum registro tem `source = 'xlsx_upload'`** — os dois uploads não gravaram nada.
+- Verificando as permissões da tabela `tiny_customers_cache`:
+  - Existe **apenas 1 política**: `Allow public read access` (só leitura).
+  - **Não existe política de UPDATE** para o usuário anônimo do navegador.
+  - **Não existe GRANT** de UPDATE para os papéis `anon`/`authenticated`.
 
-### 1. Novo componente: `PhoneUploadCard`
-- Substitui `PhoneSyncCard` na aba **API & Webhooks**.
-- Input `<input type="file" accept=".xlsx">`.
-- Parse client-side com **SheetJS (`xlsx`)** — biblioteca leve, sem edge function.
-- Para cada linha: extrai `ID`, `Celular` (fallback `Fone`), normaliza para formato BR (`55DDDNXXXXXXXX` — mesma regra de `normalizePhoneBR`).
-- Chama update em lote no Supabase:
-  - `UPDATE tiny_customers_cache SET telefone_normalizado=?, fone=?, celular=?, sem_telefone=false, source='xlsx_upload', synced_at=now() WHERE tiny_contact_id=? AND telefone_normalizado IS NULL`
-  - Processa em chunks de 100 para não estourar limites.
-- Feedback: total lido, atualizados, ignorados (já tinham telefone), sem match, sem telefone na planilha.
-- KPIs no card: `total no cache`, `com telefone`, `sem telefone` (mesmas contagens do card atual).
+Resultado: o navegador dispara o `UPDATE`, o banco recusa silenciosamente (afeta 0 linhas / erro de permissão), e o card mostra "concluído" porque o código atual conta como sucesso quando não vem erro claro. Por isso o contador ficou parado.
 
-### 2. Remover o fluxo antigo de sync por API
-- Deletar arquivo `src/components/dashboard/PhoneSyncCard.tsx`.
-- Deletar edge function `supabase/functions/sync-tiny-contacts/` e `supabase/functions/enrich-customer-phones/`.
-- Remover entradas correspondentes de `supabase/config.toml`.
-- Remover qualquer botão/import residual em `WebhookConfig.tsx` e `Index.tsx`.
+Somando: o card também **engole erros de permissão** — o `if (!error) updated++` mascara o problema real.
 
-### 3. Exibir telefone na tela de Clientes do Dashboard
-- `CustomersListView.tsx`: adicionar coluna **Telefone** na tabela; badge cinza "sem telefone" quando null; formatar como `(DDD) 9XXXX-XXXX`.
-- `CustomerDetailView.tsx`: exibir telefone no header, ao lado do nome/ID.
-- Fonte de dados: join client-side por `nome` normalizado com `tiny_customers_cache.telefone_normalizado` (mesmo padrão de `CrmtgCustomers.tsx`). Fazer 1 query única no carregamento e criar um `Map<nomeNormalizado, telefone>`.
+## Plano de correção
 
-### 4. Não mexer
-- CRM TG continua funcionando; consome o mesmo `tiny_customers_cache.telefone_normalizado`, então ganha os telefones do upload automaticamente.
-- Nenhuma mudança em RLS ou schema — só grava em coluna já existente.
+### 1. Migração de permissões na tabela `tiny_customers_cache`
+Uma migração única fazendo:
+- `GRANT SELECT, UPDATE ON public.tiny_customers_cache TO anon, authenticated;`
+- `GRANT ALL ON public.tiny_customers_cache TO service_role;`
+- Nova política de UPDATE liberando o preenchimento pelo dashboard (mesma postura pública já usada na SELECT):
+  ```sql
+  CREATE POLICY "Allow public update customers cache"
+  ON public.tiny_customers_cache
+  FOR UPDATE USING (true) WITH CHECK (true);
+  ```
+- (Segurança: como o app é privado e a tabela já é pública para leitura, manter o padrão. Se você preferir travar depois, dá para restringir por token; hoje não faz sentido travar sem quebrar o resto.)
 
-## Detalhes técnicos
-- Dependência nova: `xlsx` (SheetJS) — parse XLSX no browser.
-- Normalização de nome/telefone replicada em `src/lib/normalize.ts` (espelhando `_shared/normalizeNome.ts`), para reuso no componente.
-- Update em batch usa `.upsert()` com `onConflict: 'tiny_contact_id'` filtrando previamente as linhas onde já existe telefone (busca prévia dos `tiny_contact_id` que estão NULL, faz interseção com a planilha).
+### 2. Ajustar o `PhoneUploadCard`
+- **Deixar de engolir erro**: se qualquer chunk retornar erro, exibir toast vermelho com a mensagem exata do banco.
+- Contar somente linhas realmente atualizadas usando `.select('customer_id')` no retorno do `update`, que devolve o array das linhas afetadas — assim o número no card reflete a realidade.
+- Trocar terminologia visível de "cache" para **"cadastro"**:
+  - "No cache" → "Clientes cadastrados"
+  - "Clientes encontrados no cache" → "Clientes encontrados no cadastro"
+  - Descrição do card reescrita: deixa claro que grava direto no cadastro de cada cliente no banco.
 
-## Confirmação final
-1. Upload manual de XLSX no dashboard → preenche só telefones em branco.
-2. Toda captura de telefone via API Tiny (botões + edge functions) removida.
-3. Telefone passa a aparecer na tela de Clientes do dashboard (lista + detalhe).
+### 3. Devolutiva pós-fix
+Depois da migração aprovada e do próximo upload que você fizer, eu:
+- Rodo `SELECT count(*) FILTER (WHERE source='xlsx_upload')` e reporto o total.
+- Devolvo 3 nomes aleatórios recém-preenchidos, com telefone formatado, para você abrir na tela de Clientes do dashboard e conferir se aparece igual à planilha.
+
+## O que **não** muda
+- Estrutura das tabelas, chaves, relações — nada.
+- CRM TG, BotConversa e demais telas — continuam lendo do mesmo lugar e ganham os telefones automaticamente.
+- Fluxo de upload manual pela aba **API & Webhooks** — segue igual, só passa a funcionar.
