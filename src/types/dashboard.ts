@@ -55,6 +55,7 @@ export interface CustomerData {
   orders: TinyOrder[];
   products: ProductPurchase[];
   top_payment_method?: string;
+  telefone?: string | null;
 }
 
 export interface ProductPurchase {

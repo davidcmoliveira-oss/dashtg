@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { ArrowLeft, User, Calendar, TrendingUp, ShoppingBag, Package, Clock, Download, Search, ChevronDown, ChevronUp, CreditCard, RotateCcw } from "lucide-react";
+import { ArrowLeft, User, Calendar, TrendingUp, ShoppingBag, Package, Clock, Download, Search, ChevronDown, ChevronUp, CreditCard, RotateCcw, Phone } from "lucide-react";
+import { formatPhoneBR } from "@/lib/normalize";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -346,11 +347,17 @@ export const CustomerDetailView = ({ customer, isLoading, onBack }: CustomerDeta
           </div>
           <div>
             <h1 className="text-2xl font-bold">{customer.customer_name}</h1>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-sm text-muted-foreground">ID: {customer.customer_id}</span>
               <span className="text-sm text-muted-foreground">
                 <Calendar className="h-3 w-3 inline mr-1" />
                 Último pedido: {customer.last_order_date}
+              </span>
+              <span className="text-sm inline-flex items-center gap-1">
+                <Phone className="h-3 w-3" />
+                {customer.telefone
+                  ? <span className="text-green-600 font-medium">{formatPhoneBR(customer.telefone)}</span>
+                  : <span className="text-muted-foreground">sem telefone</span>}
               </span>
               <Badge variant={customer.is_active ? "default" : "secondary"} className={customer.is_active ? "bg-accent" : ""}>
                 {customer.is_active ? "Ativo" : "Inativo"}

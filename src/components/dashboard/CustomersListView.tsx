@@ -1,11 +1,12 @@
 import { useState, useMemo } from "react";
-import { Search, Users, UserCheck, TrendingUp, ShoppingBag, Package, Clock, RotateCcw, CreditCard } from "lucide-react";
+import { Search, Users, UserCheck, TrendingUp, ShoppingBag, Package, Clock, RotateCcw, CreditCard, Phone } from "lucide-react";
 import { BotConversaExportButton } from "./botconversa/BotConversaExportButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CustomerData, TinyOrder } from "@/types/dashboard";
+import { formatPhoneBR } from "@/lib/normalize";
 import { MetricTooltip } from "./MetricTooltip";
 import { AiInsightsPanel } from "./AiInsightsPanel";
 import { NewVsReturningChart } from "./NewVsReturningChart";
@@ -579,6 +580,12 @@ export const CustomersListView = ({ customers, orders, allOrders, isLoading, onC
                         Último: {customer.last_order_date} •
                         Última compra: {customer.days_since_last_purchase} dias •
                         Média entre compras: {avgBetweenLabel}
+                      </p>
+                      <p className="text-xs mt-1 flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        {customer.telefone
+                          ? <span className="text-green-600 font-medium">{formatPhoneBR(customer.telefone)}</span>
+                          : <span className="text-muted-foreground">sem telefone</span>}
                       </p>
                     </div>
                   </div>

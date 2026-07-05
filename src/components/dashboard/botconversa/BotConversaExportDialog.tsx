@@ -40,29 +40,34 @@ export const BotConversaExportDialog = ({ open, onOpenChange, customers, reportS
     setPhones({});
     if (customers.length === 0) return;
     setLoadingPhones(true);
-    const ids = customers.map((c) => c.customer_id);
-    const BATCH = 60;
-    const chunks: string[][] = [];
-    for (let i = 0; i < ids.length; i += BATCH) chunks.push(ids.slice(i, i + BATCH));
 
     (async () => {
+      const { normalizeNome } = await import("@/lib/normalize");
+      const ids = customers.map((c) => c.customer_id);
+      const normMap = new Map<string, string>();
+      ids.forEach((id) => normMap.set(id, normalizeNome(id)));
+      const normValues = Array.from(new Set(Array.from(normMap.values()).filter(Boolean)));
+
       const merged: Record<string, string | null> = {};
+      const BATCH = 200;
+      const phoneByNorm = new Map<string, string | null>();
       let hadError = false;
-      for (const chunk of chunks) {
-        try {
-          const { data, error } = await supabase.functions.invoke("enrich-customer-phones", {
-            body: { customer_ids: chunk },
-          });
-          if (error) {
-            hadError = true;
-            continue;
-          }
-          Object.assign(merged, (data as any)?.phones || {});
-          setPhones({ ...merged });
-        } catch {
-          hadError = true;
-        }
+      for (let i = 0; i < normValues.length; i += BATCH) {
+        const chunk = normValues.slice(i, i + BATCH);
+        const { data, error } = await supabase
+          .from("tiny_customers_cache")
+          .select("nome_normalizado, telefone_normalizado")
+          .in("nome_normalizado", chunk);
+        if (error) { hadError = true; continue; }
+        (data || []).forEach((row: any) => {
+          if (row.nome_normalizado) phoneByNorm.set(row.nome_normalizado, row.telefone_normalizado || null);
+        });
       }
+      ids.forEach((id) => {
+        const norm = normMap.get(id) || "";
+        merged[id] = phoneByNorm.get(norm) || null;
+      });
+      setPhones(merged);
       if (hadError) toast.error("Alguns telefones não puderam ser buscados");
       setLoadingPhones(false);
     })();
