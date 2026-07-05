@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { normalizeNome } from "@/lib/normalize";
 import {
   TinyOrder,
   CustomerData,
@@ -79,6 +80,7 @@ export const useDashboardData = () => {
   const [cachedOrders, setCachedOrders] = useState<CachedOrder[]>([]);
   const [cachedDetails, setCachedDetails] = useState<Map<number, CachedDetail>>(new Map());
   const [productCache, setProductCache] = useState<Map<string, ProductCacheEntry>>(new Map());
+  const [phoneCache, setPhoneCache] = useState<Map<string, string>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
