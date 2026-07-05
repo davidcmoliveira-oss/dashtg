@@ -555,9 +555,10 @@ export const useDashboardData = () => {
         orders: sortedOrders,
         products: productsList,
         top_payment_method: topPaymentMethod,
+        telefone: phoneCache.get(normalizeNome(customerId)) || null,
       };
     }).sort((a, b) => b.total_spend - a.total_spend);
-  }, [filteredOrders, orders]);
+  }, [filteredOrders, orders, phoneCache]);
 
   // Products data
   const products: ProductData[] = useMemo(() => {
