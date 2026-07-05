@@ -166,8 +166,8 @@ export const PhoneUploadCard = () => {
         </CardTitle>
         <CardDescription>
           Faça upload do arquivo <code>contatos.xlsx</code> exportado do Tiny.
-          O sistema lê a coluna <b>ID</b> e preenche o telefone apenas dos clientes que ainda estão sem número —
-          quem já tem telefone é ignorado.
+          O sistema lê a coluna <b>ID</b> e grava o telefone direto no cadastro de cada cliente no banco —
+          apenas para quem ainda está sem número. Quem já tem telefone é ignorado.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
