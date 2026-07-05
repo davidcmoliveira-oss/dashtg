@@ -215,10 +215,10 @@ export const PhoneUploadCard = () => {
               <FileSpreadsheet className="h-4 w-4" /> Resultado do último upload
             </div>
             <div>Linhas lidas: <b>{result.read.toLocaleString("pt-BR")}</b></div>
-            <div>Clientes encontrados no cache: <b>{result.matched.toLocaleString("pt-BR")}</b></div>
+            <div>Clientes encontrados no cadastro: <b>{result.matched.toLocaleString("pt-BR")}</b></div>
             <div className="text-green-600">Telefones preenchidos: <b>{result.updated.toLocaleString("pt-BR")}</b></div>
             <div className="text-muted-foreground">Ignorados (já tinham telefone): {result.skipped_had_phone.toLocaleString("pt-BR")}</div>
-            <div className="text-muted-foreground">IDs sem match no cache: {result.no_match.toLocaleString("pt-BR")}</div>
+            <div className="text-muted-foreground">IDs sem match no cadastro: {result.no_match.toLocaleString("pt-BR")}</div>
             <div className="text-muted-foreground">Linhas sem telefone na planilha: {result.no_phone_in_sheet.toLocaleString("pt-BR")}</div>
           </div>
         )}
