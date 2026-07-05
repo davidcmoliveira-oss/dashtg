@@ -98,13 +98,14 @@ export const PhoneUploadCard = () => {
 
       // Update em série por customer_id (a coluna telefone_normalizado é o alvo real)
       let updated = 0;
+      let firstError: string | null = null;
       const nowIso = new Date().toISOString();
       const UP_CHUNK = 50;
       for (let i = 0; i < targets.length; i += UP_CHUNK) {
         const slice = targets.slice(i, i + UP_CHUNK);
-        await Promise.all(slice.map(async (t) => {
-          const src = idToPhone.get(t.tiny_contact_id)!;
-          const { error } = await supabase
+        await Promise.all(slice.map(async (tg) => {
+          const src = idToPhone.get(tg.tiny_contact_id)!;
+          const { data, error } = await supabase
             .from("tiny_customers_cache")
             .update({
               telefone_normalizado: src.tel,
@@ -115,10 +116,22 @@ export const PhoneUploadCard = () => {
               source: "xlsx_upload",
               synced_at: nowIso,
             })
-            .eq("customer_id", t.customer_id)
-            .is("telefone_normalizado", null); // segurança extra
-          if (!error) updated++;
+            .eq("customer_id", tg.customer_id)
+            .is("telefone_normalizado", null)
+            .select("customer_id");
+          if (error) {
+            if (!firstError) firstError = error.message;
+            console.error("update falhou", tg.customer_id, error);
+          } else if (data && data.length > 0) {
+            updated++;
+          }
         }));
+      }
+
+      if (firstError && updated === 0) {
+        toast.error("Nenhum telefone foi gravado", { id: t, description: firstError });
+        setResult({ read: rows.length, matched: foundIds.size, updated: 0, skipped_had_phone: skippedHadPhone, no_match: noMatch, no_phone_in_sheet: noPhoneInSheet });
+        return;
       }
 
       const res: UploadResult = {
