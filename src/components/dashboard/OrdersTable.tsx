@@ -58,10 +58,21 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
       const funnelMap = new Map<string, string>();
       (funnels ?? []).forEach((f: any) => funnelMap.set(f.id, f.nome));
 
-      const { data: states } = await supabase
-        .from("crmtg_customer_state")
-        .select("customer_id, funnel_atual_id")
-        .not("funnel_atual_id", "is", null);
+      const PAGE_SIZE = 1000;
+      const states: Array<{ customer_id: string; funnel_atual_id: string | null }> = [];
+      for (let page = 0; ; page++) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data: chunk, error: chunkErr } = await supabase
+          .from("crmtg_customer_state")
+          .select("customer_id, funnel_atual_id")
+          .not("funnel_atual_id", "is", null)
+          .range(from, to);
+        if (chunkErr) { console.error("crmtg_customer_state page error:", chunkErr.message); break; }
+        if (!chunk || chunk.length === 0) break;
+        states.push(...(chunk as any));
+        if (chunk.length < PAGE_SIZE) break;
+      }
 
       const custMap = new Map<string, string>();
       const names = new Set<string>();
