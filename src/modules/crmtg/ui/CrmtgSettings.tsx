@@ -1,20 +1,42 @@
-import { useCrmtgSettings } from "../api/useCrmtg";
+import { useCrmtgSettings, runDailyBuildNow, runSenderNow } from "../api/useCrmtg";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 export const CrmtgSettings = () => {
   const { data, isLoading, error, update } = useCrmtgSettings();
   const [form, setForm] = useState<any>({});
+  const [running, setRunning] = useState<"build" | "sender" | null>(null);
   useEffect(() => { if (data) setForm(data); }, [data]);
 
   const save = async () => {
     try { await update.mutateAsync(form); toast.success("Configurações salvas"); }
     catch (e: any) { toast.error(e.message); }
+  };
+
+  const doRunBuild = async () => {
+    setRunning("build");
+    try {
+      const { data: r, error } = await runDailyBuildNow();
+      if (error) throw error;
+      if ((r as any)?.skipped) toast.warning(`Build pulado: ${(r as any).reason}`);
+      else toast.success(`Build ok — ${(r as any)?.fila_criada ?? 0} mensagens na fila`);
+    } catch (e: any) { toast.error(`Falha no build: ${e.message}`); }
+    finally { setRunning(null); }
+  };
+  const doRunSender = async () => {
+    setRunning("sender");
+    try {
+      const { error } = await runSenderNow();
+      if (error) throw error;
+      toast.success("Sender executado");
+    } catch (e: any) { toast.error(`Falha no sender: ${e.message}`); }
+    finally { setRunning(null); }
   };
 
   if (isLoading) return <div className="text-muted-foreground">Carregando configurações…</div>;
