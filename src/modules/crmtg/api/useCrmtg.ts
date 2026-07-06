@@ -59,8 +59,15 @@ export function useCrmtgFunnels() {
   });
   const saveFunnel = useMutation({
     mutationFn: async (f: Partial<CrmtgFunnel> & { id?: string }) => {
-      if (f.id) { const { error } = await supabase.from("crmtg_funnels").update(f).eq("id", f.id); if (error) throw error; return f.id; }
-      const { data, error } = await supabase.from("crmtg_funnels").insert(f as any).select("id").single(); if (error) throw error; return data.id;
+      const { id, ...rest } = f;
+      if (id && id.length > 0) {
+        const { error } = await supabase.from("crmtg_funnels").update(rest).eq("id", id);
+        if (error) throw error;
+        return id;
+      }
+      const { data, error } = await supabase.from("crmtg_funnels").insert(rest as any).select("id").single();
+      if (error) throw error;
+      return data.id;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crmtg-funnels"] }),
   });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Download, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TinyOrder } from "@/types/dashboard";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OrdersTableProps {
   orders: TinyOrder[];
@@ -29,13 +37,49 @@ interface OrdersTableProps {
 type SortField = 'order_date' | 'total_paid' | 'net_revenue' | 'items_count' | 'customer_name';
 type SortDirection = 'asc' | 'desc';
 
+const FUNNEL_FILTER_NONE = "__none__";
+const FUNNEL_FILTER_ALL = "__all__";
+
 export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableProps) => {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('order_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedOrder, setSelectedOrder] = useState<TinyOrder | null>(null);
+  const [funnelFilter, setFunnelFilter] = useState<string>(FUNNEL_FILTER_ALL);
+  const [funnelByCustomer, setFunnelByCustomer] = useState<Map<string, string>>(new Map());
+  const [funnelOptions, setFunnelOptions] = useState<string[]>([]);
   const itemsPerPage = 20;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: funnels } = await supabase.from("crmtg_funnels").select("id, nome");
+      const funnelMap = new Map<string, string>();
+      (funnels ?? []).forEach((f: any) => funnelMap.set(f.id, f.nome));
+
+      const { data: states } = await supabase
+        .from("crmtg_customer_state")
+        .select("customer_id, funnel_atual_id")
+        .not("funnel_atual_id", "is", null);
+
+      const custMap = new Map<string, string>();
+      const names = new Set<string>();
+      (states ?? []).forEach((s: any) => {
+        const nome = s.funnel_atual_id ? funnelMap.get(s.funnel_atual_id) : null;
+        if (s.customer_id && nome) {
+          custMap.set(s.customer_id, nome);
+          names.add(nome);
+        }
+      });
+      if (!cancelled) {
+        setFunnelByCustomer(custMap);
+        setFunnelOptions(Array.from(names).sort());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
 
   const formatCurrency = (value: number) =>
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
@@ -69,11 +113,18 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
 
   // Filter and sort orders
   const filteredOrders = orders
-    .filter(order =>
-      order.order_id.toLowerCase().includes(search.toLowerCase()) ||
-      order.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      order.payment_method.toLowerCase().includes(search.toLowerCase())
-    )
+    .filter(order => {
+      const funnelNome = funnelByCustomer.get(order.customer_id) || "";
+      if (funnelFilter === FUNNEL_FILTER_NONE && funnelNome) return false;
+      if (funnelFilter !== FUNNEL_FILTER_ALL && funnelFilter !== FUNNEL_FILTER_NONE && funnelNome !== funnelFilter) return false;
+      const s = search.toLowerCase();
+      return (
+        order.order_id.toLowerCase().includes(s) ||
+        order.customer_name.toLowerCase().includes(s) ||
+        order.payment_method.toLowerCase().includes(s) ||
+        funnelNome.toLowerCase().includes(s)
+      );
+    })
     .sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
@@ -103,11 +154,12 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   );
 
   const exportCSV = () => {
-    const headers = ['ID', 'Data', 'Cliente', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Pagamento', 'Canal', 'Status Entrega'];
+    const headers = ['ID', 'Data', 'Cliente', 'Funil CRM', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Pagamento', 'Canal', 'Status Entrega'];
     const rows = filteredOrders.map(o => [
       o.order_id,
       o.order_date,
       o.customer_name,
+      funnelByCustomer.get(o.customer_id) || '',
       o.items_count,
       o.total_paid,
       o.net_revenue,
@@ -160,17 +212,31 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   return (
     <div className="rounded-xl border border-border bg-card p-6 animate-slide-up">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar pedido, cliente, pagamento..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="pl-9"
-          />
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar pedido, cliente, pagamento, funil..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9"
+            />
+          </div>
+          <Select value={funnelFilter} onValueChange={(v) => { setFunnelFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Filtrar por funil" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FUNNEL_FILTER_ALL}>Todos os funis</SelectItem>
+              <SelectItem value={FUNNEL_FILTER_NONE}>Sem funil</SelectItem>
+              {funnelOptions.map(nome => (
+                <SelectItem key={nome} value={nome}>{nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
@@ -220,6 +286,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                 Valor Líquido <SortIcon field="net_revenue" />
               </TableHead>
               <TableHead>Pagamento</TableHead>
+              <TableHead>Funil CRM</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Entrega</TableHead>
             </TableRow>
@@ -227,7 +294,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
           <TableBody>
             {paginatedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Nenhum pedido encontrado
                 </TableCell>
               </TableRow>
@@ -255,6 +322,13 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                   <TableCell className="text-right">{formatCurrency(order.total_paid)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(order.net_revenue)}</TableCell>
                   <TableCell>{order.payment_method}</TableCell>
+                  <TableCell>
+                    {funnelByCustomer.get(order.customer_id) ? (
+                      <Badge variant="secondary">{funnelByCustomer.get(order.customer_id)}</Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>{getStatusBadge(order.status)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{order.delivery_status}</Badge>
