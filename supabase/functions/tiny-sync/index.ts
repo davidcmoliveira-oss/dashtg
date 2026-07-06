@@ -406,6 +406,10 @@ serve(async (req) => {
       success: true,
       mode,
       orders_synced: allOrders.length,
+      new_orders: newOrderIds.length,
+      new_orders_with_details: readyForAutomation.length,
+      new_orders_deferred: deferredAutomation.length,
+      details_failed: detailsFailed.length,
       rate_limited: rateLimited,
       timestamp: new Date().toISOString(),
     };
