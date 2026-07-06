@@ -225,13 +225,14 @@ export const useDashboardData = () => {
     addLog(`Iniciando sincronização ${mode}...`);
     try {
       const { data, error: fnError } = await supabase.functions.invoke('tiny-sync', {
-        body: { mode },
+        body: { mode, wait: true },
       });
 
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
 
-      addLog(`Sync completo: ${data.orders_synced} pedidos${data.rate_limited ? ' (rate limited)' : ''}`);
+      const synced = data?.orders_synced ?? data?.fetched ?? 0;
+      addLog(`Sync completo: ${synced} pedidos${data?.rate_limited ? ' (rate limited)' : ''}`);
       setLastSyncTime(new Date());
 
       // Reload from cache after sync
