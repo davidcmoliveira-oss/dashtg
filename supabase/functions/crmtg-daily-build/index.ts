@@ -3,6 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { routeCustomer, pickMessageVersion, type Funnel, type CustomerSnapshot } from "../_shared/crmtg-routing.ts";
 
 const TZ = "America/Sao_Paulo";
+const CUTOFF_DATE = "2026-07-05"; // Só pedidos a partir dessa data são elegíveis a funis
 function todayBRT(): string {
   const d = new Date();
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
