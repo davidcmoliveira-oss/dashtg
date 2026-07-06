@@ -322,6 +322,13 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                   <TableCell className="text-right">{formatCurrency(order.total_paid)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(order.net_revenue)}</TableCell>
                   <TableCell>{order.payment_method}</TableCell>
+                  <TableCell>
+                    {funnelByCustomer.get(order.customer_id) ? (
+                      <Badge variant="secondary">{funnelByCustomer.get(order.customer_id)}</Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>{getStatusBadge(order.status)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{order.delivery_status}</Badge>
