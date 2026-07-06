@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
       id: f.id, nome: f.nome, categoria: f.categoria, prioridade: f.prioridade, ativo: f.ativo,
       produtos_gatilho: f.produtos_gatilho || [],
       touches: (touchesRaw || []).filter(t => t.funnel_id === f.id).sort((a,b) => a.dia_offset - b.dia_offset)
-        .map(t => ({ id: t.id, ordem: t.ordem, dia_offset: t.dia_offset, botconversa_flow_id: t.botconversa_flow_id, mensagem_v1: t.mensagem_v1, mensagem_v2: t.mensagem_v2, mensagem_v3: t.mensagem_v3 })),
+        .map(t => ({ id: t.id, ordem: t.ordem, dia_offset: t.dia_offset, botconversa_flow_id: t.botconversa_flow_id, flow_id_v1: t.flow_id_v1, flow_id_v2: t.flow_id_v2, flow_id_v3: t.flow_id_v3, mensagem_v1: t.mensagem_v1, mensagem_v2: t.mensagem_v2, mensagem_v3: t.mensagem_v3 })),
     }));
 
     // 4) Snapshot de clientes: agregação de pedidos (paginado, supera limite 1000)
