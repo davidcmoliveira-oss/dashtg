@@ -127,8 +127,16 @@ const FunnelEditor = ({ funnel, touches, onClose, onSaveFunnel, onSaveTouch, onD
   const [f, setF] = useState<CrmtgFunnel>(funnel);
   const [skusInput, setSkusInput] = useState((funnel.produtos_gatilho || []).join(", "));
 
+  const [saving, setSaving] = useState(false);
   const save = async () => {
-    await onSaveFunnel({ ...f, produtos_gatilho: skusInput.split(",").map(s => s.trim()).filter(Boolean) });
+    setSaving(true);
+    try {
+      await onSaveFunnel({ ...f, produtos_gatilho: skusInput.split(",").map(s => s.trim()).filter(Boolean) });
+    } catch (e: any) {
+      toast.error("Erro ao salvar funil", { description: e?.message ?? String(e) });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addTouch = async () => {
