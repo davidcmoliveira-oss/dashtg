@@ -73,8 +73,42 @@ export const CrmtgSettings = () => {
           <div><Label>Intervalo max lote (s)</Label><Input type="number" value={form.intervalo_max_lote ?? 180} onChange={(e) => setForm({ ...form, intervalo_max_lote: Number(e.target.value) })}/></div>
         </div>
 
+        <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+          <div>
+            <Label>Status do sistema</Label>
+            <p className="text-sm text-muted-foreground">Ligue para permitir disparos automáticos. Desligue para pausar.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={form.sistema_pausado ? "destructive" : "default"}>
+              {form.sistema_pausado ? "Pausado" : "Ativo"}
+            </Badge>
+            <Switch
+              checked={!form.sistema_pausado}
+              onCheckedChange={(v) => setForm({ ...form, sistema_pausado: !v })}
+            />
+          </div>
+        </div>
+
         <Button onClick={save} className="w-full">Salvar configurações</Button>
-        <p className="text-xs text-muted-foreground">Timezone fixo: America/Sao_Paulo. Última execução diária: {data.ultima_execucao_diaria ? new Date(data.ultima_execucao_diaria).toLocaleString("pt-BR") : "—"}</p>
+
+        <div className="pt-3 border-t space-y-2">
+          <Label className="text-sm">Execução manual</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={doRunBuild} disabled={running !== null}>
+              {running === "build" ? "Rodando build…" : "Rodar build agora"}
+            </Button>
+            <Button variant="outline" onClick={doRunSender} disabled={running !== null}>
+              {running === "sender" ? "Rodando sender…" : "Rodar sender agora"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            "Build" recalcula quem entra em qual funil e monta a fila do dia. "Sender" dispara as mensagens pendentes agora (respeitando o horário configurado).
+          </p>
+        </div>
+
+        <p className="text-xs text-muted-foreground pt-2">
+          Timezone fixo: America/Sao_Paulo · Última execução diária: {data.ultima_execucao_diaria ? new Date(data.ultima_execucao_diaria).toLocaleString("pt-BR") : "—"}
+        </p>
       </Card>
     </div>
   );
