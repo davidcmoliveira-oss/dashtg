@@ -113,11 +113,18 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
 
   // Filter and sort orders
   const filteredOrders = orders
-    .filter(order =>
-      order.order_id.toLowerCase().includes(search.toLowerCase()) ||
-      order.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      order.payment_method.toLowerCase().includes(search.toLowerCase())
-    )
+    .filter(order => {
+      const funnelNome = funnelByCustomer.get(order.customer_id) || "";
+      if (funnelFilter === FUNNEL_FILTER_NONE && funnelNome) return false;
+      if (funnelFilter !== FUNNEL_FILTER_ALL && funnelFilter !== FUNNEL_FILTER_NONE && funnelNome !== funnelFilter) return false;
+      const s = search.toLowerCase();
+      return (
+        order.order_id.toLowerCase().includes(s) ||
+        order.customer_name.toLowerCase().includes(s) ||
+        order.payment_method.toLowerCase().includes(s) ||
+        funnelNome.toLowerCase().includes(s)
+      );
+    })
     .sort((a, b) => {
       let comparison = 0;
       switch (sortField) {
