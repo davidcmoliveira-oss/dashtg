@@ -231,11 +231,21 @@ export const useDashboardData = () => {
       if (fnError) throw new Error(fnError.message);
       if (data?.error) throw new Error(data.error);
 
-      addLog(`Sync completo: ${data.orders_synced} pedidos${data.rate_limited ? ' (rate limited)' : ''}`);
-      setLastSyncTime(new Date());
-
-      // Reload from cache after sync
-      await loadFromCache();
+      if (data?.queued) {
+        addLog('Sincronização iniciada em segundo plano. Atualizando conforme concluir...');
+        setLastSyncTime(new Date());
+        // Poll cache a few times to pick up new data as the background job finishes
+        const delays = [15000, 30000, 60000, 120000];
+        for (const ms of delays) {
+          await new Promise((r) => setTimeout(r, ms));
+          await loadFromCache();
+        }
+      } else {
+        const synced = data?.orders_synced ?? data?.fetched ?? 0;
+        addLog(`Sync completo: ${synced} pedidos${data?.rate_limited ? ' (rate limited)' : ''}`);
+        setLastSyncTime(new Date());
+        await loadFromCache();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro na sincronização';
       addLog(`Sync erro: ${message}`);
