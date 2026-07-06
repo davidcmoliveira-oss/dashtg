@@ -286,6 +286,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
                 Valor Líquido <SortIcon field="net_revenue" />
               </TableHead>
               <TableHead>Pagamento</TableHead>
+              <TableHead>Funil CRM</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Entrega</TableHead>
             </TableRow>
@@ -293,7 +294,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
           <TableBody>
             {paginatedOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   Nenhum pedido encontrado
                 </TableCell>
               </TableRow>
