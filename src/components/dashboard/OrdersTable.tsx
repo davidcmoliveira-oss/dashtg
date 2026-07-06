@@ -76,7 +76,7 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
 
       const custMap = new Map<string, string>();
       const names = new Set<string>();
-      (states ?? []).forEach((s: any) => {
+      states.forEach((s: any) => {
         const nome = s.funnel_atual_id ? funnelMap.get(s.funnel_atual_id) : null;
         if (s.customer_id && nome) {
           custMap.set(s.customer_id, nome);
