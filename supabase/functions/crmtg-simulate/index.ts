@@ -1,16 +1,11 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { routeCustomer, type Funnel, type CustomerSnapshot } from "../_shared/crmtg-routing.ts";
+import { CUTOFF_DATE, parseBRDate } from "../_shared/crmtg-cutoff.ts";
 
 const TZ = "America/Sao_Paulo";
-const CUTOFF_DATE = "2026-07-05";
 function todayBRT(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
-}
-function parseBRDate(s: string | null): string | null {
-  if (!s) return null;
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
 function diffDays(iso: string): number {
   const d = new Date(iso + "T00:00:00-03:00").getTime();
