@@ -223,7 +223,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         success: true, mode: 'backfill',
         total_orders: allCachedIds.length, missing_details: idsToFetch.length,
-        fetched, rate_limited: rateLimited,
+        fetched, failed: totalFailed.length, rate_limited: rateLimited,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
