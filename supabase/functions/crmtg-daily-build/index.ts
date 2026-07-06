@@ -132,6 +132,7 @@ Deno.serve(async (req) => {
     const endMin = hEndH * 60 + hEndM;
     const totalWindow = endMin - startMin;
 
+    const stateRows: any[] = [];
     let idx = 0;
     for (const snap of snapshots) {
       const r = routeCustomer(snap, funnels);
@@ -145,8 +146,8 @@ Deno.serve(async (req) => {
       const offsetHoje = diffDays(entradaDate);
       const touchesHoje = r.funnel.touches.filter(t => t.dia_offset === offsetHoje);
 
-      // upsert state mesmo sem toque hoje (para fixar entrada_em)
-      await supa.from("crmtg_customer_state").upsert({
+      // acumula state row para upsert em lote
+      stateRows.push({
         customer_id: snap.customer_id,
         fase: r.funnel.categoria,
         funnel_atual_id: r.funnel.id,
@@ -184,6 +185,14 @@ Deno.serve(async (req) => {
         idx++;
       }
     }
+
+    // Upsert state em lotes de 500 (evita milhares de round-trips sequenciais)
+    for (let i = 0; i < stateRows.length; i += 500) {
+      const chunk = stateRows.slice(i, i + 500);
+      const { error } = await supa.from("crmtg_customer_state").upsert(chunk, { onConflict: "customer_id" });
+      if (error) console.error("state upsert error:", error.message);
+    }
+
 
     // limpa fila pending antiga deste dia
     await supa.from("crmtg_daily_queue").delete().eq("run_date", runDate).in("status", ["pending", "blocked_no_phone"]);
