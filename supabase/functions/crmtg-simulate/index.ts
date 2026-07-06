@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
     for (const o of validOrders) {
       const d = parseBRDate(o.data_pedido);
       if (!d) continue;
+      if (d < CUTOFF_DATE) continue;
       const cur = lastByCust.get(o.nome);
       if (!cur || d > cur.date) lastByCust.set(o.nome, { date: d, tiny_order_id: o.tiny_order_id });
     }
