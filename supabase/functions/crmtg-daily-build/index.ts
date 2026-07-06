@@ -1,19 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { routeCustomer, pickMessageVersion, type Funnel, type CustomerSnapshot } from "../_shared/crmtg-routing.ts";
+import { CUTOFF_DATE, parseBRDate } from "../_shared/crmtg-cutoff.ts";
 
 const TZ = "America/Sao_Paulo";
-const CUTOFF_DATE = "2026-07-05"; // Só pedidos a partir dessa data são elegíveis a funis
 function todayBRT(): string {
   const d = new Date();
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
   return fmt.format(d);
-}
-function parseBRDate(s: string | null): string | null {
-  if (!s) return null;
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (!m) return null;
-  return `${m[3]}-${m[2]}-${m[1]}`;
 }
 function diffDays(iso: string): number {
   const d = new Date(iso + "T00:00:00-03:00").getTime();
