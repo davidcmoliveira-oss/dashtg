@@ -73,8 +73,14 @@ export function routeCustomer(c: CustomerSnapshot, funnels: Funnel[]): RouteResu
   return { funnel: null, motivo: "nenhum funil ativo aplicável", entrada_em: c.last_order_date };
 }
 
-export function pickMessageVersion(seed: number, v1: string, v2: string, v3: string): { versao: number; texto: string } {
-  const opts = [v1, v2, v3].map((t, i) => ({ versao: i + 1, texto: (t || "").trim() })).filter(o => o.texto.length > 0);
-  if (opts.length === 0) return { versao: 1, texto: "" };
+export function pickMessageVersion(
+  seed: number,
+  touch: { mensagem_v1: string; mensagem_v2: string; mensagem_v3: string; flow_id_v1?: string | null; flow_id_v2?: string | null; flow_id_v3?: string | null; botconversa_flow_id?: string | null }
+): { versao: number; texto: string; flow_id: string | null } {
+  const flows = [touch.flow_id_v1, touch.flow_id_v2, touch.flow_id_v3];
+  const opts = [touch.mensagem_v1, touch.mensagem_v2, touch.mensagem_v3]
+    .map((t, i) => ({ versao: i + 1, texto: (t || "").trim(), flow_id: (flows[i] || "").trim() || touch.botconversa_flow_id || null }))
+    .filter(o => o.texto.length > 0 || (o.flow_id && o.flow_id.length > 0));
+  if (opts.length === 0) return { versao: 1, texto: "", flow_id: touch.botconversa_flow_id || null };
   return opts[seed % opts.length];
 }
