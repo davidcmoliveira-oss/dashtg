@@ -51,10 +51,6 @@ export const CrmtgSettings = () => {
       </div>
 
       <Card className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div><Label>Sistema pausado</Label><p className="text-sm text-muted-foreground">Bloqueia todos os disparos.</p></div>
-          <Switch checked={!!form.sistema_pausado} onCheckedChange={(v) => setForm({ ...form, sistema_pausado: v })}/>
-        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Horário início</Label><Input type="time" value={form.horario_inicio?.slice(0,5) || "09:00"} onChange={(e) => setForm({ ...form, horario_inicio: e.target.value })}/></div>
