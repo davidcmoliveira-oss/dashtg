@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Search, Download, ChevronDown, ChevronUp, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TinyOrder } from "@/types/dashboard";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OrdersTableProps {
   orders: TinyOrder[];
@@ -29,13 +37,49 @@ interface OrdersTableProps {
 type SortField = 'order_date' | 'total_paid' | 'net_revenue' | 'items_count' | 'customer_name';
 type SortDirection = 'asc' | 'desc';
 
+const FUNNEL_FILTER_NONE = "__none__";
+const FUNNEL_FILTER_ALL = "__all__";
+
 export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableProps) => {
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useState<SortField>('order_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedOrder, setSelectedOrder] = useState<TinyOrder | null>(null);
+  const [funnelFilter, setFunnelFilter] = useState<string>(FUNNEL_FILTER_ALL);
+  const [funnelByCustomer, setFunnelByCustomer] = useState<Map<string, string>>(new Map());
+  const [funnelOptions, setFunnelOptions] = useState<string[]>([]);
   const itemsPerPage = 20;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: funnels } = await supabase.from("crmtg_funnels").select("id, nome");
+      const funnelMap = new Map<string, string>();
+      (funnels ?? []).forEach((f: any) => funnelMap.set(f.id, f.nome));
+
+      const { data: states } = await supabase
+        .from("crmtg_customer_state")
+        .select("customer_id, funnel_atual_id")
+        .not("funnel_atual_id", "is", null);
+
+      const custMap = new Map<string, string>();
+      const names = new Set<string>();
+      (states ?? []).forEach((s: any) => {
+        const nome = s.funnel_atual_id ? funnelMap.get(s.funnel_atual_id) : null;
+        if (s.customer_id && nome) {
+          custMap.set(s.customer_id, nome);
+          names.add(nome);
+        }
+      });
+      if (!cancelled) {
+        setFunnelByCustomer(custMap);
+        setFunnelOptions(Array.from(names).sort());
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
 
   const formatCurrency = (value: number) =>
     `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
