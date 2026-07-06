@@ -64,40 +64,104 @@ const buildDetailRow = (orderId: number, pedido: any) => {
   };
 };
 
-// Fetch order details with concurrency control and rate limit handling
-const fetchOrderDetails = async (token: string, ids: number[], concurrency = 3) => {
+// Fetch order details with concurrency control + retry-on-rate-limit.
+// Each id gets up to MAX_RETRIES attempts with exponential backoff.
+// A global time budget prevents runaway loops (Edge function timeout ~150s).
+const MAX_RETRIES_PER_ID = 5;
+const RETRY_BACKOFF_MS = [3000, 8000, 20000, 45000, 60000]; // per attempt
+const GLOBAL_RATE_LIMIT_BUDGET_MS = 120_000; // total time we allow burning on backoff waits
+
+const fetchOrderDetails = async (
+  token: string,
+  ids: number[],
+  concurrency = 2,
+): Promise<{ results: Record<number, any>; failedIds: number[]; rateLimited: boolean }> => {
   const results: Record<number, any> = {};
+  const failedIds: number[] = [];
+  const attempts = new Map<number, number>();
   const queue = [...ids];
-  let rateLimited = false;
+  let rateLimitedGlobal = false;
+  let backoffSpent = 0;
+  const startedAt = Date.now();
 
   const worker = async () => {
-    while (queue.length > 0 && !rateLimited) {
+    while (queue.length > 0) {
       const id = queue.shift();
       if (!id) break;
+      const attempt = (attempts.get(id) || 0);
       try {
-        await delay(200); // Small delay to avoid rate limiting
+        await delay(250); // small spacing between calls
         const data = await tinyPost('https://api.tiny.com.br/api2/pedido.obter.php', {
           token, formato: 'JSON', id: String(id),
         });
         if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
           results[id] = data.retorno.pedido;
-        } else if (data.retorno?.status === 'Erro') {
+          continue;
+        }
+        if (data.retorno?.status === 'Erro') {
           const erros = data.retorno.erros?.map((e: { erro: string }) => e.erro).join(', ') || '';
           if (isRateLimitError(erros)) {
-            console.error(`Rate limited at order ${id}`);
-            rateLimited = true;
-            break;
+            if (attempt >= MAX_RETRIES_PER_ID) {
+              console.error(`Order ${id}: max retries (${MAX_RETRIES_PER_ID}) exceeded on rate limit — giving up`);
+              failedIds.push(id);
+              continue;
+            }
+            const wait = RETRY_BACKOFF_MS[Math.min(attempt, RETRY_BACKOFF_MS.length - 1)];
+            if (backoffSpent + wait > GLOBAL_RATE_LIMIT_BUDGET_MS) {
+              console.error(`Order ${id}: global backoff budget exhausted — deferring (will retry next sync)`);
+              failedIds.push(id);
+              // Push remaining queue to failed and stop workers gracefully
+              rateLimitedGlobal = true;
+              while (queue.length > 0) {
+                const rem = queue.shift();
+                if (rem) failedIds.push(rem);
+              }
+              return;
+            }
+            attempts.set(id, attempt + 1);
+            backoffSpent += wait;
+            console.warn(`Order ${id}: rate limited (attempt ${attempt + 1}/${MAX_RETRIES_PER_ID}), backing off ${wait}ms (spent ${backoffSpent}ms)`);
+            await delay(wait);
+            queue.push(id); // re-enqueue for retry
+            continue;
           }
+          // Non-rate-limit API error — do NOT loop, mark as failed
+          console.error(`Order ${id}: Tiny API error (non-rate-limit): ${erros}`);
+          failedIds.push(id);
+          continue;
         }
+        // Unknown response shape — treat as failure, no retry
+        console.error(`Order ${id}: unexpected Tiny response`, JSON.stringify(data).slice(0, 200));
+        failedIds.push(id);
       } catch (e) {
-        console.error(`Error fetching order ${id}:`, e);
+        // Network / parse error — retry up to MAX_RETRIES_PER_ID
+        if (attempt >= MAX_RETRIES_PER_ID) {
+          console.error(`Order ${id}: network error after ${attempt} retries — giving up:`, e);
+          failedIds.push(id);
+          continue;
+        }
+        attempts.set(id, attempt + 1);
+        const wait = 2000 * (attempt + 1);
+        console.warn(`Order ${id}: network error (attempt ${attempt + 1}), retrying in ${wait}ms:`, (e as Error).message);
+        await delay(wait);
+        queue.push(id);
+      }
+      // Hard safety: if the whole loop is running too long, bail out
+      if (Date.now() - startedAt > GLOBAL_RATE_LIMIT_BUDGET_MS + 30_000) {
+        console.error(`fetchOrderDetails: hard time cap reached — deferring remaining ${queue.length} orders`);
+        rateLimitedGlobal = true;
+        while (queue.length > 0) {
+          const rem = queue.shift();
+          if (rem) failedIds.push(rem);
+        }
+        return;
       }
     }
   };
 
   const workers = Array.from({ length: Math.min(concurrency, ids.length) }, () => worker());
   await Promise.all(workers);
-  return { results, rateLimited };
+  return { results, failedIds, rateLimited: rateLimitedGlobal };
 };
 
 serve(async (req) => {
