@@ -212,17 +212,31 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   return (
     <div className="rounded-xl border border-border bg-card p-6 animate-slide-up">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar pedido, cliente, pagamento..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="pl-9"
-          />
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-1">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar pedido, cliente, pagamento, funil..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9"
+            />
+          </div>
+          <Select value={funnelFilter} onValueChange={(v) => { setFunnelFilter(v); setCurrentPage(1); }}>
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Filtrar por funil" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FUNNEL_FILTER_ALL}>Todos os funis</SelectItem>
+              <SelectItem value={FUNNEL_FILTER_NONE}>Sem funil</SelectItem>
+              {funnelOptions.map(nome => (
+                <SelectItem key={nome} value={nome}>{nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={exportCSV} className="gap-2">
