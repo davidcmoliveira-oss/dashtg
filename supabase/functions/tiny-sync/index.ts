@@ -258,11 +258,12 @@ async function doSync(db: ReturnType<typeof getSupabaseAdmin>, tinyApiToken: str
       }
       if (totalFailed.length > 0) console.warn(`Backfill: ${totalFailed.length} orders deferred to next run`);
 
-      return new Response(JSON.stringify({
+      return {
         success: true, mode: 'backfill',
         total_orders: allCachedIds.length, missing_details: idsToFetch.length,
         fetched, failed: totalFailed.length, rate_limited: rateLimited,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      };
+
     }
 
     // Determine date range
