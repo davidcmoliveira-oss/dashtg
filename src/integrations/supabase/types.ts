@@ -314,6 +314,9 @@ export type Database = {
           botconversa_flow_id: string | null
           created_at: string
           dia_offset: number
+          flow_id_v1: string | null
+          flow_id_v2: string | null
+          flow_id_v3: string | null
           funnel_id: string
           id: string
           mensagem_v1: string
@@ -326,6 +329,9 @@ export type Database = {
           botconversa_flow_id?: string | null
           created_at?: string
           dia_offset: number
+          flow_id_v1?: string | null
+          flow_id_v2?: string | null
+          flow_id_v3?: string | null
           funnel_id: string
           id?: string
           mensagem_v1?: string
@@ -338,6 +344,9 @@ export type Database = {
           botconversa_flow_id?: string | null
           created_at?: string
           dia_offset?: number
+          flow_id_v1?: string | null
+          flow_id_v2?: string | null
+          flow_id_v3?: string | null
           funnel_id?: string
           id?: string
           mensagem_v1?: string
