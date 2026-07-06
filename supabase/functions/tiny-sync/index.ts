@@ -453,16 +453,7 @@ async function doSync(db: ReturnType<typeof getSupabaseAdmin>, tinyApiToken: str
     };
 
     console.log('Sync complete:', JSON.stringify(response));
-    return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Sync error:', msg);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return response;
   }
-});
+}
+
