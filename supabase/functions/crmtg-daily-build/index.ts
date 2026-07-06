@@ -3,6 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { routeCustomer, pickMessageVersion, type Funnel, type CustomerSnapshot } from "../_shared/crmtg-routing.ts";
 
 const TZ = "America/Sao_Paulo";
+const CUTOFF_DATE = "2026-07-05"; // Só pedidos a partir dessa data são elegíveis a funis
 function todayBRT(): string {
   const d = new Date();
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" });
@@ -53,7 +54,7 @@ Deno.serve(async (req) => {
       id: f.id, nome: f.nome, categoria: f.categoria, prioridade: f.prioridade, ativo: f.ativo,
       produtos_gatilho: f.produtos_gatilho || [],
       touches: (touchesRaw || []).filter(t => t.funnel_id === f.id).sort((a,b) => a.dia_offset - b.dia_offset)
-        .map(t => ({ id: t.id, ordem: t.ordem, dia_offset: t.dia_offset, botconversa_flow_id: t.botconversa_flow_id, mensagem_v1: t.mensagem_v1, mensagem_v2: t.mensagem_v2, mensagem_v3: t.mensagem_v3 })),
+        .map(t => ({ id: t.id, ordem: t.ordem, dia_offset: t.dia_offset, botconversa_flow_id: t.botconversa_flow_id, flow_id_v1: t.flow_id_v1, flow_id_v2: t.flow_id_v2, flow_id_v3: t.flow_id_v3, mensagem_v1: t.mensagem_v1, mensagem_v2: t.mensagem_v2, mensagem_v3: t.mensagem_v3 })),
     }));
 
     // 4) Snapshot de clientes: agregação de pedidos (paginado, supera limite 1000)
@@ -70,11 +71,12 @@ Deno.serve(async (req) => {
       if (chunk.length < PAGE) break;
     }
 
-    // último pedido por cliente
+    // último pedido por cliente (apenas pedidos a partir do CUTOFF)
     const lastByCust = new Map<string, { date: string; tiny_order_id: number }>();
     for (const o of validOrders) {
       const d = parseBRDate(o.data_pedido);
       if (!d) continue;
+      if (d < CUTOFF_DATE) continue;
       const cur = lastByCust.get(o.nome);
       if (!cur || d > cur.date) lastByCust.set(o.nome, { date: d, tiny_order_id: o.tiny_order_id });
     }
@@ -160,7 +162,7 @@ Deno.serve(async (req) => {
       elegiveis++;
 
       for (const t of touchesHoje) {
-        const pick = pickMessageVersion(idx, t.mensagem_v1, t.mensagem_v2, t.mensagem_v3);
+        const pick = pickMessageVersion(idx, t);
         const min = startMin + Math.floor((totalWindow * (idx % 50)) / 50);
         const h = Math.floor(min / 60);
         const m = min % 60;
@@ -176,7 +178,7 @@ Deno.serve(async (req) => {
           touch_id: t.id,
           touch_ordem: t.ordem,
           horario_previsto: horario,
-          flow_id: t.botconversa_flow_id,
+          flow_id: pick.flow_id,
           mensagem_versao: pick.versao,
           texto_render: pick.texto,
           status: snap.telefone_normalizado ? "pending" : "blocked_no_phone",

@@ -3,6 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { routeCustomer, type Funnel, type CustomerSnapshot } from "../_shared/crmtg-routing.ts";
 
 const TZ = "America/Sao_Paulo";
+const CUTOFF_DATE = "2026-07-05";
 function todayBRT(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
 }
@@ -40,6 +41,7 @@ Deno.serve(async (req) => {
     for (const o of validOrders) {
       const d = parseBRDate(o.data_pedido);
       if (!d) continue;
+      if (d < CUTOFF_DATE) continue;
       const cur = lastByCust.get(o.nome);
       if (!cur || d > cur.date) lastByCust.set(o.nome, { date: d, tiny_order_id: o.tiny_order_id });
     }

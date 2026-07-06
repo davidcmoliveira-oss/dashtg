@@ -196,17 +196,27 @@ const TouchEditor = ({ touch, funnelCategoria, onSave, onDelete }: { touch: Crmt
     <Card className="p-3 space-y-2 border-l-4 border-l-primary/40">
       <div className="flex gap-2 items-end">
         <div className="w-24"><Label className="text-xs">D+</Label><Input type="number" value={t.dia_offset} onChange={(e) => setT({ ...t, dia_offset: Number(e.target.value) })} onBlur={() => onSave(t)}/></div>
-        <div className="flex-1"><Label className="text-xs">Flow ID BotConversa</Label><Input value={t.botconversa_flow_id || ""} onChange={(e) => setT({ ...t, botconversa_flow_id: e.target.value })} onBlur={() => onSave(t)}/></div>
+        <div className="flex-1"><Label className="text-xs">Flow ID padrão (fallback)</Label><Input value={t.botconversa_flow_id || ""} onChange={(e) => setT({ ...t, botconversa_flow_id: e.target.value })} onBlur={() => onSave(t)} placeholder="usado se a versão não tiver flow próprio"/></div>
         <Button size="sm" variant="outline" onClick={genAi} disabled={busy}><Sparkles className="h-4 w-4 mr-1"/>{busy ? "Gerando…" : "Gerar IA"}</Button>
         <Button size="icon" variant="ghost" onClick={onDelete}><Trash2 className="h-4 w-4"/></Button>
       </div>
       <div className="grid md:grid-cols-3 gap-2">
         {[1,2,3].map(v => (
-          <Textarea key={v} placeholder={`Versão ${v}`} rows={4}
-            value={(t as any)[`mensagem_v${v}`] || ""}
-            onChange={(e) => setT({ ...t, [`mensagem_v${v}`]: e.target.value } as any)}
-            onBlur={() => onSave(t)}
-          />
+          <div key={v} className="space-y-1 border rounded p-2 bg-muted/30">
+            <Label className="text-xs font-semibold">Versão {v}</Label>
+            <Input
+              placeholder={`Flow ID BotConversa v${v}`}
+              value={(t as any)[`flow_id_v${v}`] || ""}
+              onChange={(e) => setT({ ...t, [`flow_id_v${v}`]: e.target.value } as any)}
+              onBlur={() => onSave(t)}
+              className="text-xs"
+            />
+            <Textarea placeholder={`Mensagem v${v}`} rows={4}
+              value={(t as any)[`mensagem_v${v}`] || ""}
+              onChange={(e) => setT({ ...t, [`mensagem_v${v}`]: e.target.value } as any)}
+              onBlur={() => onSave(t)}
+            />
+          </div>
         ))}
       </div>
     </Card>
