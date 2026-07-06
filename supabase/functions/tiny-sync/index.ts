@@ -64,40 +64,104 @@ const buildDetailRow = (orderId: number, pedido: any) => {
   };
 };
 
-// Fetch order details with concurrency control and rate limit handling
-const fetchOrderDetails = async (token: string, ids: number[], concurrency = 3) => {
+// Fetch order details with concurrency control + retry-on-rate-limit.
+// Each id gets up to MAX_RETRIES attempts with exponential backoff.
+// A global time budget prevents runaway loops (Edge function timeout ~150s).
+const MAX_RETRIES_PER_ID = 5;
+const RETRY_BACKOFF_MS = [3000, 8000, 20000, 45000, 60000]; // per attempt
+const GLOBAL_RATE_LIMIT_BUDGET_MS = 120_000; // total time we allow burning on backoff waits
+
+const fetchOrderDetails = async (
+  token: string,
+  ids: number[],
+  concurrency = 2,
+): Promise<{ results: Record<number, any>; failedIds: number[]; rateLimited: boolean }> => {
   const results: Record<number, any> = {};
+  const failedIds: number[] = [];
+  const attempts = new Map<number, number>();
   const queue = [...ids];
-  let rateLimited = false;
+  let rateLimitedGlobal = false;
+  let backoffSpent = 0;
+  const startedAt = Date.now();
 
   const worker = async () => {
-    while (queue.length > 0 && !rateLimited) {
+    while (queue.length > 0) {
       const id = queue.shift();
       if (!id) break;
+      const attempt = (attempts.get(id) || 0);
       try {
-        await delay(200); // Small delay to avoid rate limiting
+        await delay(250); // small spacing between calls
         const data = await tinyPost('https://api.tiny.com.br/api2/pedido.obter.php', {
           token, formato: 'JSON', id: String(id),
         });
         if (data.retorno?.status === 'OK' && data.retorno?.pedido) {
           results[id] = data.retorno.pedido;
-        } else if (data.retorno?.status === 'Erro') {
+          continue;
+        }
+        if (data.retorno?.status === 'Erro') {
           const erros = data.retorno.erros?.map((e: { erro: string }) => e.erro).join(', ') || '';
           if (isRateLimitError(erros)) {
-            console.error(`Rate limited at order ${id}`);
-            rateLimited = true;
-            break;
+            if (attempt >= MAX_RETRIES_PER_ID) {
+              console.error(`Order ${id}: max retries (${MAX_RETRIES_PER_ID}) exceeded on rate limit — giving up`);
+              failedIds.push(id);
+              continue;
+            }
+            const wait = RETRY_BACKOFF_MS[Math.min(attempt, RETRY_BACKOFF_MS.length - 1)];
+            if (backoffSpent + wait > GLOBAL_RATE_LIMIT_BUDGET_MS) {
+              console.error(`Order ${id}: global backoff budget exhausted — deferring (will retry next sync)`);
+              failedIds.push(id);
+              // Push remaining queue to failed and stop workers gracefully
+              rateLimitedGlobal = true;
+              while (queue.length > 0) {
+                const rem = queue.shift();
+                if (rem) failedIds.push(rem);
+              }
+              return;
+            }
+            attempts.set(id, attempt + 1);
+            backoffSpent += wait;
+            console.warn(`Order ${id}: rate limited (attempt ${attempt + 1}/${MAX_RETRIES_PER_ID}), backing off ${wait}ms (spent ${backoffSpent}ms)`);
+            await delay(wait);
+            queue.push(id); // re-enqueue for retry
+            continue;
           }
+          // Non-rate-limit API error — do NOT loop, mark as failed
+          console.error(`Order ${id}: Tiny API error (non-rate-limit): ${erros}`);
+          failedIds.push(id);
+          continue;
         }
+        // Unknown response shape — treat as failure, no retry
+        console.error(`Order ${id}: unexpected Tiny response`, JSON.stringify(data).slice(0, 200));
+        failedIds.push(id);
       } catch (e) {
-        console.error(`Error fetching order ${id}:`, e);
+        // Network / parse error — retry up to MAX_RETRIES_PER_ID
+        if (attempt >= MAX_RETRIES_PER_ID) {
+          console.error(`Order ${id}: network error after ${attempt} retries — giving up:`, e);
+          failedIds.push(id);
+          continue;
+        }
+        attempts.set(id, attempt + 1);
+        const wait = 2000 * (attempt + 1);
+        console.warn(`Order ${id}: network error (attempt ${attempt + 1}), retrying in ${wait}ms:`, (e as Error).message);
+        await delay(wait);
+        queue.push(id);
+      }
+      // Hard safety: if the whole loop is running too long, bail out
+      if (Date.now() - startedAt > GLOBAL_RATE_LIMIT_BUDGET_MS + 30_000) {
+        console.error(`fetchOrderDetails: hard time cap reached — deferring remaining ${queue.length} orders`);
+        rateLimitedGlobal = true;
+        while (queue.length > 0) {
+          const rem = queue.shift();
+          if (rem) failedIds.push(rem);
+        }
+        return;
       }
     }
   };
 
   const workers = Array.from({ length: Math.min(concurrency, ids.length) }, () => worker());
   await Promise.all(workers);
-  return { results, rateLimited };
+  return { results, failedIds, rateLimited: rateLimitedGlobal };
 };
 
 serve(async (req) => {
@@ -139,24 +203,27 @@ serve(async (req) => {
 
       let rateLimited = false;
       let fetched = 0;
+      const totalFailed: number[] = [];
       for (let i = 0; i < idsToFetch.length; i += 20) {
         if (rateLimited) break;
         const batch = idsToFetch.slice(i, i + 20);
-        const { results, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
+        const { results, failedIds, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 2);
         const detailRows = Object.entries(results).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
           if (error) console.error('Backfill upsert error:', error.message);
           fetched += detailRows.length;
         }
+        totalFailed.push(...failedIds);
         if (rl) { rateLimited = true; break; }
         await delay(500);
       }
+      if (totalFailed.length > 0) console.warn(`Backfill: ${totalFailed.length} orders deferred to next run`);
 
       return new Response(JSON.stringify({
         success: true, mode: 'backfill',
         total_orders: allCachedIds.length, missing_details: idsToFetch.length,
-        fetched, rate_limited: rateLimited,
+        fetched, failed: totalFailed.length, rate_limited: rateLimited,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -258,61 +325,70 @@ serve(async (req) => {
       console.log(`Cached ${rows.length} orders`);
     }
 
-    // Step 3: Fetch details for orders that are NOT already in details cache
+    // Step 3: Fetch details — NEW orders first (guaranteed capture), then updates
+    const detailsCaptured = new Set<number>();
+    const detailsFailed: number[] = [];
     if (!rateLimited && allOrders.length > 0) {
-      const allIds = allOrders.map((o: any) => o.pedido.id);
-
-      // Check which IDs already have details cached
-      const { data: existingDetails } = await db
-        .from('tiny_order_details_cache')
-        .select('tiny_order_id')
-        .in('tiny_order_id', allIds);
-
-      const existingIds = new Set((existingDetails || []).map((r: any) => r.tiny_order_id));
-      
-      // For incremental syncs, re-fetch details for recent orders (might have updates)
-      let idsToFetch: number[];
+      const allIds: number[] = allOrders.map((o: any) => Number(o.pedido.id));
+      const newSet = new Set(newOrderIds);
+      // Priority queue: new orders first, then existing (only re-fetch existing on incremental)
+      const prioritized: number[] = [];
+      for (const id of allIds) if (newSet.has(id)) prioritized.push(id);
       if (mode === 'incremental') {
-        // Re-fetch all for incremental (it's only ~2 days)
-        idsToFetch = allIds;
+        for (const id of allIds) if (!newSet.has(id)) prioritized.push(id);
       } else {
-        // For full sync, skip already cached ones
-        idsToFetch = allIds.filter((id: number) => !existingIds.has(id));
+        const { data: existingDetails } = await db
+          .from('tiny_order_details_cache')
+          .select('tiny_order_id')
+          .in('tiny_order_id', allIds);
+        const existingIds = new Set((existingDetails || []).map((r: any) => Number(r.tiny_order_id)));
+        for (const id of allIds) if (!newSet.has(id) && !existingIds.has(id)) prioritized.push(id);
       }
 
-      console.log(`Details: ${existingIds.size} already cached, ${idsToFetch.length} to fetch`);
+      console.log(`Details fetch plan: ${newOrderIds.length} new (priority) + ${prioritized.length - newOrderIds.length} others`);
 
-      // Fetch details in batches of 20
-      for (let i = 0; i < idsToFetch.length; i += 20) {
-        const batch = idsToFetch.slice(i, i + 20);
-        console.log(`Fetching details batch ${Math.floor(i / 20) + 1}/${Math.ceil(idsToFetch.length / 20)}`);
-
-        const { results: details, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
-
-        // Upsert fetched details
+      for (let i = 0; i < prioritized.length; i += 20) {
+        const batch = prioritized.slice(i, i + 20);
+        console.log(`Fetching details batch ${Math.floor(i / 20) + 1}/${Math.ceil(prioritized.length / 20)}`);
+        const { results: details, failedIds, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 2);
         const detailRows = Object.entries(details).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
-
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
-          if (error) console.error('Details cache write error:', error.message);
+          if (error) {
+            console.error('Details cache write error:', error.message);
+          } else {
+            for (const r of detailRows) detailsCaptured.add(r.tiny_order_id);
+          }
         }
-
+        detailsFailed.push(...failedIds);
         if (rl) {
-          console.log('Rate limited during details fetch, stopping');
+          console.error(`Rate limited during details fetch — ${failedIds.length} in batch + remaining orders deferred to next sync`);
           rateLimited = true;
           break;
         }
-
-        if (i + 20 < idsToFetch.length) await delay(500);
+        if (i + 20 < prioritized.length) await delay(500);
+      }
+      if (detailsFailed.length > 0) {
+        const newFailed = detailsFailed.filter(id => newSet.has(id));
+        if (newFailed.length > 0) {
+          console.error(`ATENÇÃO: ${newFailed.length} pedidos NOVOS ficaram sem detalhes (serão reprocessados no próximo sync):`, newFailed);
+        }
       }
     }
 
-    // Step 4: Trigger automation engine for new orders (fire-and-forget per order)
-    if (newOrderIds.length > 0) {
-      console.log(`Triggering automation-engine for ${newOrderIds.length} new orders`);
+    // Step 4: Trigger automation engine ONLY for new orders whose details were captured.
+    // Orders without details are deferred — the next incremental sync (priority queue) will capture them
+    // and their automation will fire then. This prevents silent misses on rate-limit.
+    const readyForAutomation = newOrderIds.filter(id => detailsCaptured.has(id));
+    const deferredAutomation = newOrderIds.filter(id => !detailsCaptured.has(id));
+    if (deferredAutomation.length > 0) {
+      console.warn(`Deferring automation for ${deferredAutomation.length} new orders without details:`, deferredAutomation);
+    }
+    if (readyForAutomation.length > 0) {
+      console.log(`Triggering automation-engine for ${readyForAutomation.length} new orders with details`);
       const engineUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine`;
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      await Promise.all(newOrderIds.map(async (orderId) => {
+      await Promise.all(readyForAutomation.map(async (orderId) => {
         try {
           const r = await fetch(engineUrl, {
             method: 'POST',
@@ -330,6 +406,10 @@ serve(async (req) => {
       success: true,
       mode,
       orders_synced: allOrders.length,
+      new_orders: newOrderIds.length,
+      new_orders_with_details: readyForAutomation.length,
+      new_orders_deferred: deferredAutomation.length,
+      details_failed: detailsFailed.length,
       rate_limited: rateLimited,
       timestamp: new Date().toISOString(),
     };
