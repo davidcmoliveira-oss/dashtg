@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
       elegiveis++;
 
       for (const t of touchesHoje) {
-        const pick = pickMessageVersion(idx, t.mensagem_v1, t.mensagem_v2, t.mensagem_v3);
+        const pick = pickMessageVersion(idx, t);
         const min = startMin + Math.floor((totalWindow * (idx % 50)) / 50);
         const h = Math.floor(min / 60);
         const m = min % 60;
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
           touch_id: t.id,
           touch_ordem: t.ordem,
           horario_previsto: horario,
-          flow_id: t.botconversa_flow_id,
+          flow_id: pick.flow_id,
           mensagem_versao: pick.versao,
           texto_render: pick.texto,
           status: snap.telefone_normalizado ? "pending" : "blocked_no_phone",
