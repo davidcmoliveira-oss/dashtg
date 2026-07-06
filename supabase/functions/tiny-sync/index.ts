@@ -325,61 +325,70 @@ serve(async (req) => {
       console.log(`Cached ${rows.length} orders`);
     }
 
-    // Step 3: Fetch details for orders that are NOT already in details cache
+    // Step 3: Fetch details — NEW orders first (guaranteed capture), then updates
+    const detailsCaptured = new Set<number>();
+    const detailsFailed: number[] = [];
     if (!rateLimited && allOrders.length > 0) {
-      const allIds = allOrders.map((o: any) => o.pedido.id);
-
-      // Check which IDs already have details cached
-      const { data: existingDetails } = await db
-        .from('tiny_order_details_cache')
-        .select('tiny_order_id')
-        .in('tiny_order_id', allIds);
-
-      const existingIds = new Set((existingDetails || []).map((r: any) => r.tiny_order_id));
-      
-      // For incremental syncs, re-fetch details for recent orders (might have updates)
-      let idsToFetch: number[];
+      const allIds: number[] = allOrders.map((o: any) => Number(o.pedido.id));
+      const newSet = new Set(newOrderIds);
+      // Priority queue: new orders first, then existing (only re-fetch existing on incremental)
+      const prioritized: number[] = [];
+      for (const id of allIds) if (newSet.has(id)) prioritized.push(id);
       if (mode === 'incremental') {
-        // Re-fetch all for incremental (it's only ~2 days)
-        idsToFetch = allIds;
+        for (const id of allIds) if (!newSet.has(id)) prioritized.push(id);
       } else {
-        // For full sync, skip already cached ones
-        idsToFetch = allIds.filter((id: number) => !existingIds.has(id));
+        const { data: existingDetails } = await db
+          .from('tiny_order_details_cache')
+          .select('tiny_order_id')
+          .in('tiny_order_id', allIds);
+        const existingIds = new Set((existingDetails || []).map((r: any) => Number(r.tiny_order_id)));
+        for (const id of allIds) if (!newSet.has(id) && !existingIds.has(id)) prioritized.push(id);
       }
 
-      console.log(`Details: ${existingIds.size} already cached, ${idsToFetch.length} to fetch`);
+      console.log(`Details fetch plan: ${newOrderIds.length} new (priority) + ${prioritized.length - newOrderIds.length} others`);
 
-      // Fetch details in batches of 20
-      for (let i = 0; i < idsToFetch.length; i += 20) {
-        const batch = idsToFetch.slice(i, i + 20);
-        console.log(`Fetching details batch ${Math.floor(i / 20) + 1}/${Math.ceil(idsToFetch.length / 20)}`);
-
-        const { results: details, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
-
-        // Upsert fetched details
+      for (let i = 0; i < prioritized.length; i += 20) {
+        const batch = prioritized.slice(i, i + 20);
+        console.log(`Fetching details batch ${Math.floor(i / 20) + 1}/${Math.ceil(prioritized.length / 20)}`);
+        const { results: details, failedIds, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 2);
         const detailRows = Object.entries(details).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
-
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
-          if (error) console.error('Details cache write error:', error.message);
+          if (error) {
+            console.error('Details cache write error:', error.message);
+          } else {
+            for (const r of detailRows) detailsCaptured.add(r.tiny_order_id);
+          }
         }
-
+        detailsFailed.push(...failedIds);
         if (rl) {
-          console.log('Rate limited during details fetch, stopping');
+          console.error(`Rate limited during details fetch — ${failedIds.length} in batch + remaining orders deferred to next sync`);
           rateLimited = true;
           break;
         }
-
-        if (i + 20 < idsToFetch.length) await delay(500);
+        if (i + 20 < prioritized.length) await delay(500);
+      }
+      if (detailsFailed.length > 0) {
+        const newFailed = detailsFailed.filter(id => newSet.has(id));
+        if (newFailed.length > 0) {
+          console.error(`ATENÇÃO: ${newFailed.length} pedidos NOVOS ficaram sem detalhes (serão reprocessados no próximo sync):`, newFailed);
+        }
       }
     }
 
-    // Step 4: Trigger automation engine for new orders (fire-and-forget per order)
-    if (newOrderIds.length > 0) {
-      console.log(`Triggering automation-engine for ${newOrderIds.length} new orders`);
+    // Step 4: Trigger automation engine ONLY for new orders whose details were captured.
+    // Orders without details are deferred — the next incremental sync (priority queue) will capture them
+    // and their automation will fire then. This prevents silent misses on rate-limit.
+    const readyForAutomation = newOrderIds.filter(id => detailsCaptured.has(id));
+    const deferredAutomation = newOrderIds.filter(id => !detailsCaptured.has(id));
+    if (deferredAutomation.length > 0) {
+      console.warn(`Deferring automation for ${deferredAutomation.length} new orders without details:`, deferredAutomation);
+    }
+    if (readyForAutomation.length > 0) {
+      console.log(`Triggering automation-engine for ${readyForAutomation.length} new orders with details`);
       const engineUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/automation-engine`;
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      await Promise.all(newOrderIds.map(async (orderId) => {
+      await Promise.all(readyForAutomation.map(async (orderId) => {
         try {
           const r = await fetch(engineUrl, {
             method: 'POST',
