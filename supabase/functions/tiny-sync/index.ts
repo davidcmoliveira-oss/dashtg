@@ -164,18 +164,56 @@ const fetchOrderDetails = async (
   return { results, failedIds, rateLimited: rateLimitedGlobal };
 };
 
+// @ts-ignore EdgeRuntime é global no Supabase Edge Runtime
+declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const tinyApiToken = Deno.env.get('TINY_API_TOKEN');
-    if (!tinyApiToken) throw new Error('TINY_API_TOKEN não configurado');
+  const tinyApiToken = Deno.env.get('TINY_API_TOKEN');
+  if (!tinyApiToken) {
+    return new Response(JSON.stringify({ error: 'TINY_API_TOKEN não configurado' }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
-    const body = await req.json().catch(() => ({}));
-    const mode = body.mode || 'incremental'; // 'full' | 'incremental' | 'backfill'
+  const body = await req.json().catch(() => ({}));
+  const mode = body.mode || 'incremental';
+  const waitForResult = body.wait === true; // opcional: aguardar (uso em testes)
+
+  const runSync = async () => {
     const db = getSupabaseAdmin();
+    try {
+      return await doSync(db, tinyApiToken, mode, body);
+    } catch (e) {
+      console.error('Background sync error:', (e as Error).message);
+      return { success: false, error: (e as Error).message };
+    }
+  };
+
+  if (waitForResult) {
+    const result = await runSync();
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Fire-and-forget em background — evita IDLE_TIMEOUT 504 no cliente
+  if (typeof EdgeRuntime !== 'undefined') {
+    EdgeRuntime.waitUntil(runSync());
+  } else {
+    runSync();
+  }
+  return new Response(JSON.stringify({ success: true, mode, queued: true, message: 'sync iniciado em background' }), {
+    status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+});
+
+async function doSync(db: ReturnType<typeof getSupabaseAdmin>, tinyApiToken: string, mode: string, body: any) {
+  {
+
 
     // ============ MODE: 'backfill' — only fetch missing details for cached orders ============
     if (mode === 'backfill') {
