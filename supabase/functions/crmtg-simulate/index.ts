@@ -3,6 +3,7 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { routeCustomer, type Funnel, type CustomerSnapshot } from "../_shared/crmtg-routing.ts";
 
 const TZ = "America/Sao_Paulo";
+const CUTOFF_DATE = "2026-07-05";
 function todayBRT(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
 }
