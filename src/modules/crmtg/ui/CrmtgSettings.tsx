@@ -1,20 +1,42 @@
-import { useCrmtgSettings } from "../api/useCrmtg";
+import { useCrmtgSettings, runDailyBuildNow, runSenderNow } from "../api/useCrmtg";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 export const CrmtgSettings = () => {
   const { data, isLoading, error, update } = useCrmtgSettings();
   const [form, setForm] = useState<any>({});
+  const [running, setRunning] = useState<"build" | "sender" | null>(null);
   useEffect(() => { if (data) setForm(data); }, [data]);
 
   const save = async () => {
     try { await update.mutateAsync(form); toast.success("Configurações salvas"); }
     catch (e: any) { toast.error(e.message); }
+  };
+
+  const doRunBuild = async () => {
+    setRunning("build");
+    try {
+      const { data: r, error } = await runDailyBuildNow();
+      if (error) throw error;
+      if ((r as any)?.skipped) toast.warning(`Build pulado: ${(r as any).reason}`);
+      else toast.success(`Build ok — ${(r as any)?.fila_criada ?? 0} mensagens na fila`);
+    } catch (e: any) { toast.error(`Falha no build: ${e.message}`); }
+    finally { setRunning(null); }
+  };
+  const doRunSender = async () => {
+    setRunning("sender");
+    try {
+      const { error } = await runSenderNow();
+      if (error) throw error;
+      toast.success("Sender executado");
+    } catch (e: any) { toast.error(`Falha no sender: ${e.message}`); }
+    finally { setRunning(null); }
   };
 
   if (isLoading) return <div className="text-muted-foreground">Carregando configurações…</div>;
@@ -29,10 +51,6 @@ export const CrmtgSettings = () => {
       </div>
 
       <Card className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div><Label>Sistema pausado</Label><p className="text-sm text-muted-foreground">Bloqueia todos os disparos.</p></div>
-          <Switch checked={!!form.sistema_pausado} onCheckedChange={(v) => setForm({ ...form, sistema_pausado: v })}/>
-        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div><Label>Horário início</Label><Input type="time" value={form.horario_inicio?.slice(0,5) || "09:00"} onChange={(e) => setForm({ ...form, horario_inicio: e.target.value })}/></div>
@@ -51,8 +69,42 @@ export const CrmtgSettings = () => {
           <div><Label>Intervalo max lote (s)</Label><Input type="number" value={form.intervalo_max_lote ?? 180} onChange={(e) => setForm({ ...form, intervalo_max_lote: Number(e.target.value) })}/></div>
         </div>
 
+        <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+          <div>
+            <Label>Status do sistema</Label>
+            <p className="text-sm text-muted-foreground">Ligue para permitir disparos automáticos. Desligue para pausar.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant={form.sistema_pausado ? "destructive" : "default"}>
+              {form.sistema_pausado ? "Pausado" : "Ativo"}
+            </Badge>
+            <Switch
+              checked={!form.sistema_pausado}
+              onCheckedChange={(v) => setForm({ ...form, sistema_pausado: !v })}
+            />
+          </div>
+        </div>
+
         <Button onClick={save} className="w-full">Salvar configurações</Button>
-        <p className="text-xs text-muted-foreground">Timezone fixo: America/Sao_Paulo. Última execução diária: {data.ultima_execucao_diaria ? new Date(data.ultima_execucao_diaria).toLocaleString("pt-BR") : "—"}</p>
+
+        <div className="pt-3 border-t space-y-2">
+          <Label className="text-sm">Execução manual</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={doRunBuild} disabled={running !== null}>
+              {running === "build" ? "Rodando build…" : "Rodar build agora"}
+            </Button>
+            <Button variant="outline" onClick={doRunSender} disabled={running !== null}>
+              {running === "sender" ? "Rodando sender…" : "Rodar sender agora"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            "Build" recalcula quem entra em qual funil e monta a fila do dia. "Sender" dispara as mensagens pendentes agora (respeitando o horário configurado).
+          </p>
+        </div>
+
+        <p className="text-xs text-muted-foreground pt-2">
+          Timezone fixo: America/Sao_Paulo · Última execução diária: {data.ultima_execucao_diaria ? new Date(data.ultima_execucao_diaria).toLocaleString("pt-BR") : "—"}
+        </p>
       </Card>
     </div>
   );
