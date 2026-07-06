@@ -203,19 +203,22 @@ serve(async (req) => {
 
       let rateLimited = false;
       let fetched = 0;
+      const totalFailed: number[] = [];
       for (let i = 0; i < idsToFetch.length; i += 20) {
         if (rateLimited) break;
         const batch = idsToFetch.slice(i, i + 20);
-        const { results, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 3);
+        const { results, failedIds, rateLimited: rl } = await fetchOrderDetails(tinyApiToken, batch, 2);
         const detailRows = Object.entries(results).map(([orderId, pedido]) => buildDetailRow(parseInt(orderId), pedido));
         if (detailRows.length > 0) {
           const { error } = await db.from('tiny_order_details_cache').upsert(detailRows, { onConflict: 'tiny_order_id' });
           if (error) console.error('Backfill upsert error:', error.message);
           fetched += detailRows.length;
         }
+        totalFailed.push(...failedIds);
         if (rl) { rateLimited = true; break; }
         await delay(500);
       }
+      if (totalFailed.length > 0) console.warn(`Backfill: ${totalFailed.length} orders deferred to next run`);
 
       return new Response(JSON.stringify({
         success: true, mode: 'backfill',
