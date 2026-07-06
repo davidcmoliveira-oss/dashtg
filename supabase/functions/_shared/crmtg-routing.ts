@@ -17,6 +17,9 @@ export interface Touch {
   ordem: number;
   dia_offset: number;
   botconversa_flow_id: string | null;
+  flow_id_v1: string | null;
+  flow_id_v2: string | null;
+  flow_id_v3: string | null;
   mensagem_v1: string;
   mensagem_v2: string;
   mensagem_v3: string;
