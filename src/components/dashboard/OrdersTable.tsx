@@ -154,11 +154,12 @@ export const OrdersTable = ({ orders, isLoading, onCustomerClick }: OrdersTableP
   );
 
   const exportCSV = () => {
-    const headers = ['ID', 'Data', 'Cliente', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Pagamento', 'Canal', 'Status Entrega'];
+    const headers = ['ID', 'Data', 'Cliente', 'Funil CRM', 'Itens', 'Valor Bruto', 'Valor Líquido', 'Desconto', 'Impostos', 'Frete', 'Status', 'Pagamento', 'Canal', 'Status Entrega'];
     const rows = filteredOrders.map(o => [
       o.order_id,
       o.order_date,
       o.customer_name,
+      funnelByCustomer.get(o.customer_id) || '',
       o.items_count,
       o.total_paid,
       o.net_revenue,
