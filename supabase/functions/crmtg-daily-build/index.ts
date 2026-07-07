@@ -189,6 +189,17 @@ Deno.serve(async (req) => {
       if (error) console.error("state upsert error:", error.message);
     }
 
+    // Limpeza de órfãos: remove estados sem funil ou de funis inativos/apagados
+    const activeFunnelIds = funnels.map(f => f.id);
+    await supa.from("crmtg_customer_state").delete().is("funnel_atual_id", null);
+    if (activeFunnelIds.length > 0) {
+      await supa.from("crmtg_customer_state").delete().not("funnel_atual_id", "in", `(${activeFunnelIds.map(id => `"${id}"`).join(",")})`);
+    } else {
+      await supa.from("crmtg_customer_state").delete().not("funnel_atual_id", "is", null);
+    }
+
+
+
 
     // limpa fila pending antiga deste dia
     await supa.from("crmtg_daily_queue").delete().eq("run_date", runDate).in("status", ["pending", "blocked_no_phone"]);
