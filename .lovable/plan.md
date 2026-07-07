@@ -1,45 +1,57 @@
-## Causa raiz encontrada
 
-Rodei duas queries no banco:
+## Objetivo
 
-- **Nenhum registro tem `source = 'xlsx_upload'`** — os dois uploads não gravaram nada.
-- Verificando as permissões da tabela `tiny_customers_cache`:
-  - Existe **apenas 1 política**: `Allow public read access` (só leitura).
-  - **Não existe política de UPDATE** para o usuário anônimo do navegador.
-  - **Não existe GRANT** de UPDATE para os papéis `anon`/`authenticated`.
+1. Zerar histórico e estado do CRM TG mantendo apenas clientes cujo pedido gatilho é ≥ **05/07/2026**.
+2. Recalcular "clientes por fase" com o mesmo critério.
+3. No Painel Inicial, mostrar cada funil em formato de lista simples (sem expandir), com contagem de clientes e, para cada cliente, toque atual / último enviado / próximo envio.
 
-Resultado: o navegador dispara o `UPDATE`, o banco recusa silenciosamente (afeta 0 linhas / erro de permissão), e o card mostra "concluído" porque o código atual conta como sucesso quando não vem erro claro. Por isso o contador ficou parado.
+## 1. Limpeza de dados
 
-Somando: o card também **engole erros de permissão** — o `if (!error) updated++` mascara o problema real.
+Via ferramenta `insert` (data change):
 
-## Plano de correção
+- `DELETE FROM crmtg_history`
+- `DELETE FROM crmtg_daily_queue`
+- `DELETE FROM crmtg_customer_state WHERE ultimo_pedido_em IS NULL OR ultimo_pedido_em < '2026-07-05'`
+- `DELETE FROM crmtg_daily_run_log`
 
-### 1. Migração de permissões na tabela `tiny_customers_cache`
-Uma migração única fazendo:
-- `GRANT SELECT, UPDATE ON public.tiny_customers_cache TO anon, authenticated;`
-- `GRANT ALL ON public.tiny_customers_cache TO service_role;`
-- Nova política de UPDATE liberando o preenchimento pelo dashboard (mesma postura pública já usada na SELECT):
-  ```sql
-  CREATE POLICY "Allow public update customers cache"
-  ON public.tiny_customers_cache
-  FOR UPDATE USING (true) WITH CHECK (true);
-  ```
-- (Segurança: como o app é privado e a tabela já é pública para leitura, manter o padrão. Se você preferir travar depois, dá para restringir por token; hoje não faz sentido travar sem quebrar o resto.)
+Depois, invocar `crmtg-daily-build` manualmente para repopular estado e fila com base apenas em pedidos ≥ 05/07/2026 (cutoff já enforçado em `_shared/crmtg-cutoff.ts`).
 
-### 2. Ajustar o `PhoneUploadCard`
-- **Deixar de engolir erro**: se qualquer chunk retornar erro, exibir toast vermelho com a mensagem exata do banco.
-- Contar somente linhas realmente atualizadas usando `.select('customer_id')` no retorno do `update`, que devolve o array das linhas afetadas — assim o número no card reflete a realidade.
-- Trocar terminologia visível de "cache" para **"cadastro"**:
-  - "No cache" → "Clientes cadastrados"
-  - "Clientes encontrados no cache" → "Clientes encontrados no cadastro"
-  - Descrição do card reescrita: deixa claro que grava direto no cadastro de cada cliente no banco.
+## 2. Novo componente `CrmtgFunnelClients` no Painel Inicial
 
-### 3. Devolutiva pós-fix
-Depois da migração aprovada e do próximo upload que você fizer, eu:
-- Rodo `SELECT count(*) FILTER (WHERE source='xlsx_upload')` e reporto o total.
-- Devolvo 3 nomes aleatórios recém-preenchidos, com telefone formatado, para você abrir na tela de Clientes do dashboard e conferir se aparece igual à planilha.
+Alterar `useCrmtgDashboard` em `src/modules/crmtg/api/useCrmtg.ts` para também retornar, para cada funil ativo:
 
-## O que **não** muda
-- Estrutura das tabelas, chaves, relações — nada.
-- CRM TG, BotConversa e demais telas — continuam lendo do mesmo lugar e ganham os telefones automaticamente.
-- Fluxo de upload manual pela aba **API & Webhooks** — segue igual, só passa a funcionar.
+- `funnel_id`, `funnel_nome`, `funnel_categoria`, `total_clientes`
+- Lista de clientes (paginada via `.range()`, sem limite 1000): `customer_id`, `customer_name`, `entrada_funnel_em`
+- Toques do funil (`crmtg_funnel_touches`) ordenados por `dia_offset`
+- Último toque enviado por cliente (query única em `crmtg_history` com `funnel_id IN (...)`, ordenada por `enviado_em DESC`, agrupada client-side pela chave `customer_id|funnel_id`)
+
+### Cálculo por cliente
+
+- `dia_atual = hoje - entrada_funnel_em` (dias).
+- `toque_atual` = maior `dia_offset` ≤ `dia_atual` (ou "aguardando" se nenhum).
+- `ultimo_enviado` = do `crmtg_history` (touch_ordem + data curta `dd/mm`).
+- `proximo_envio` = menor `dia_offset` > `dia_atual` → data = `entrada_funnel_em + dia_offset dias`, formato `dd/mm` (ou "finalizado" se não houver).
+
+### UI (em `CrmtgDashboard.tsx`)
+
+Substituir o card atual "Fila por funil (hoje)" por um bloco "Clientes por funil":
+
+- Uma seção por funil, sempre visível (sem accordion), com título + badge de contagem.
+- Tabela compacta shadcn com colunas: **Cliente | Toque atual | Último enviado | Próximo envio**.
+- Se >20 clientes, mostrar os 20 primeiros por `entrada_funnel_em` desc + linha "+N clientes".
+- Estado vazio: "Nenhum cliente ativo neste funil."
+
+Manter card "Clientes por fase" (refletirá dados pós-limpeza).
+
+## 3. Validação
+
+- `psql` conferindo `crmtg_history` vazio e `crmtg_customer_state.ultimo_pedido_em >= 2026-07-05` para todos.
+- Invocar `crmtg-daily-build` e checar `crmtg_daily_run_log` (elegiveis, fila_criada).
+- Playwright em `/` → menu CRM TG → Painel Inicial: screenshot mostrando a nova seção com colunas preenchidas.
+
+## Detalhes técnicos
+
+- Sem migrations de schema — apenas DELETEs.
+- Nenhum edge function novo. Reaproveita `crmtg-daily-build`.
+- Cutoff continua em `_shared/crmtg-cutoff.ts` (`2026-07-05`).
+- Pagination via `.range()` em `crmtg_customer_state` e `crmtg_history` para evitar corte em 1000.
