@@ -119,22 +119,48 @@ export function useCrmtgDashboard() {
     queryKey: ["crmtg-dashboard"],
     queryFn: async () => {
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
-      const [states, queue, runLog] = await Promise.all([
-        supabase.from("crmtg_customer_state").select("fase, funnel_atual_id"),
-        supabase.from("crmtg_daily_queue").select("status, funnel_categoria, funnel_nome").eq("run_date", today),
+
+      // paginate customer_state to avoid 1000-row cap
+      const PAGE = 1000;
+      let from = 0;
+      const states: { fase: string | null; funnel_atual_id: string | null }[] = [];
+      while (true) {
+        const { data, error } = await supabase
+          .from("crmtg_customer_state")
+          .select("fase, funnel_atual_id")
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const rows = data || [];
+        states.push(...rows);
+        if (rows.length < PAGE) break;
+        from += PAGE;
+      }
+
+      const [funnelsRes, queue, runLog] = await Promise.all([
+        supabase.from("crmtg_funnels").select("id, nome, categoria, ativo").order("prioridade"),
+        supabase.from("crmtg_daily_queue").select("status").eq("run_date", today),
         supabase.from("crmtg_daily_run_log").select("*").eq("run_date", today).maybeSingle(),
       ]);
       const queueRows = queue.data || [];
       const byStatus: Record<string, number> = {};
       for (const r of queueRows) byStatus[r.status] = (byStatus[r.status] || 0) + 1;
       const byFase: Record<string, number> = {};
-      for (const r of (states.data || [])) byFase[r.fase || "—"] = (byFase[r.fase || "—"] || 0) + 1;
-      const byFunnel: Record<string, number> = {};
-      for (const r of queueRows) byFunnel[r.funnel_nome || "—"] = (byFunnel[r.funnel_nome || "—"] || 0) + 1;
-      return { today, byStatus, byFase, byFunnel, runLog: runLog.data, totalQueue: queueRows.length };
+      for (const r of states) byFase[r.fase || "—"] = (byFase[r.fase || "—"] || 0) + 1;
+
+      const countByFunnelId: Record<string, number> = {};
+      for (const r of states) if (r.funnel_atual_id) countByFunnelId[r.funnel_atual_id] = (countByFunnelId[r.funnel_atual_id] || 0) + 1;
+      const funnels = (funnelsRes.data || []) as { id: string; nome: string; categoria: string; ativo: boolean }[];
+      const clientesPorFunil = funnels.map(f => ({
+        id: f.id, nome: f.nome, categoria: f.categoria, ativo: f.ativo,
+        total: countByFunnelId[f.id] || 0,
+      }));
+      const semFunil = states.filter(r => !r.funnel_atual_id).length;
+
+      return { today, byStatus, byFase, clientesPorFunil, semFunil, runLog: runLog.data, totalQueue: queueRows.length };
     },
   });
 }
+
 
 export async function runDailyBuildNow() {
   return supabase.functions.invoke("crmtg-daily-build", { body: { source: "manual" } });
