@@ -63,14 +63,24 @@ export const CrmtgDashboard = () => {
           </div>
         </Card>
         <Card className="p-4">
-          <h3 className="font-semibold mb-3">Fila por funil (hoje)</h3>
+          <h3 className="font-semibold mb-3">Clientes por funil</h3>
           <div className="space-y-1 text-sm">
-            {Object.entries(d?.byFunnel || {}).map(([k,v]) => (
-              <div key={k} className="flex justify-between"><span>{k}</span><span className="font-medium">{v}</span></div>
+            {(d?.clientesPorFunil || []).map(f => (
+              <div key={f.id} className="flex justify-between items-center gap-2">
+                <span className={f.ativo ? "" : "text-muted-foreground line-through"}>{f.nome}</span>
+                <Badge variant={f.total > 0 ? "default" : "outline"}>{f.total}</Badge>
+              </div>
             ))}
-            {!Object.keys(d?.byFunnel || {}).length && <div className="text-muted-foreground text-sm">Nenhum cliente na fila.</div>}
+            {!!d?.semFunil && (
+              <div className="flex justify-between items-center gap-2 pt-2 border-t mt-2">
+                <span className="text-muted-foreground">Sem funil atribuído</span>
+                <Badge variant="outline">{d.semFunil}</Badge>
+              </div>
+            )}
+            {!d?.clientesPorFunil?.length && <div className="text-muted-foreground text-sm">Nenhum funil cadastrado.</div>}
           </div>
         </Card>
+
       </div>
 
       {d?.runLog && (
