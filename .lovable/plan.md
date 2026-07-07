@@ -1,57 +1,35 @@
+## Diagnóstico
 
-## Objetivo
+Os 16 clientes sem funil no painel são resíduos antigos em `crmtg_customer_state`:
 
-1. Zerar histórico e estado do CRM TG mantendo apenas clientes cujo pedido gatilho é ≥ **05/07/2026**.
-2. Recalcular "clientes por fase" com o mesmo critério.
-3. No Painel Inicial, mostrar cada funil em formato de lista simples (sem expandir), com contagem de clientes e, para cada cliente, toque atual / último enviado / próximo envio.
+- Todos têm `ultimo_pedido_em >= 05/07/2026`, então passaram pelo filtro da limpeza anterior.
+- Nenhum comprou o produto do único funil ativo (Creatina, SKU `0000000010221`).
+- O código atual do `crmtg-daily-build` (linha 135) só cria estado para quem casa com um funil, então esses rows vieram de execuções antigas — provavelmente de funis que foram desativados ou apagados depois.
+- O rebuild manual pós-limpeza retornou `elegiveis:0` e não os removeu.
 
-## 1. Limpeza de dados
+## Ação
 
-Via ferramenta `insert` (data change):
+**1. Remover órfãos existentes** (via data change):
 
-- `DELETE FROM crmtg_history`
-- `DELETE FROM crmtg_daily_queue`
-- `DELETE FROM crmtg_customer_state WHERE ultimo_pedido_em IS NULL OR ultimo_pedido_em < '2026-07-05'`
-- `DELETE FROM crmtg_daily_run_log`
+```sql
+DELETE FROM crmtg_customer_state WHERE funnel_atual_id IS NULL;
+```
 
-Depois, invocar `crmtg-daily-build` manualmente para repopular estado e fila com base apenas em pedidos ≥ 05/07/2026 (cutoff já enforçado em `_shared/crmtg-cutoff.ts`).
+Resultado esperado: painel passa a mostrar apenas 1 cliente (david oliveira no funil Creatina) — refletindo a regra "só entra quem casa com gatilho ativo a partir de 05/07/2026".
 
-## 2. Novo componente `CrmtgFunnelClients` no Painel Inicial
+**2. Prevenção automática** em `supabase/functions/crmtg-daily-build/index.ts`, ao final do run:
 
-Alterar `useCrmtgDashboard` em `src/modules/crmtg/api/useCrmtg.ts` para também retornar, para cada funil ativo:
+```ts
+await supa.from("crmtg_customer_state")
+  .delete()
+  .or("funnel_atual_id.is.null,funnel_atual_id.not.in.(SELECT id FROM crmtg_funnels WHERE ativo)");
+```
 
-- `funnel_id`, `funnel_nome`, `funnel_categoria`, `total_clientes`
-- Lista de clientes (paginada via `.range()`, sem limite 1000): `customer_id`, `customer_name`, `entrada_funnel_em`
-- Toques do funil (`crmtg_funnel_touches`) ordenados por `dia_offset`
-- Último toque enviado por cliente (query única em `crmtg_history` com `funnel_id IN (...)`, ordenada por `enviado_em DESC`, agrupada client-side pela chave `customer_id|funnel_id`)
+(implementado como duas chamadas separadas usando `in()` com IDs de funis ativos carregados no início do run, para respeitar PostgREST.)
 
-### Cálculo por cliente
+Assim, sempre que um funil for desativado/apagado, seus clientes saem do painel automaticamente na próxima execução diária.
 
-- `dia_atual = hoje - entrada_funnel_em` (dias).
-- `toque_atual` = maior `dia_offset` ≤ `dia_atual` (ou "aguardando" se nenhum).
-- `ultimo_enviado` = do `crmtg_history` (touch_ordem + data curta `dd/mm`).
-- `proximo_envio` = menor `dia_offset` > `dia_atual` → data = `entrada_funnel_em + dia_offset dias`, formato `dd/mm` (ou "finalizado" se não houver).
+## Validação
 
-### UI (em `CrmtgDashboard.tsx`)
-
-Substituir o card atual "Fila por funil (hoje)" por um bloco "Clientes por funil":
-
-- Uma seção por funil, sempre visível (sem accordion), com título + badge de contagem.
-- Tabela compacta shadcn com colunas: **Cliente | Toque atual | Último enviado | Próximo envio**.
-- Se >20 clientes, mostrar os 20 primeiros por `entrada_funnel_em` desc + linha "+N clientes".
-- Estado vazio: "Nenhum cliente ativo neste funil."
-
-Manter card "Clientes por fase" (refletirá dados pós-limpeza).
-
-## 3. Validação
-
-- `psql` conferindo `crmtg_history` vazio e `crmtg_customer_state.ultimo_pedido_em >= 2026-07-05` para todos.
-- Invocar `crmtg-daily-build` e checar `crmtg_daily_run_log` (elegiveis, fila_criada).
-- Playwright em `/` → menu CRM TG → Painel Inicial: screenshot mostrando a nova seção com colunas preenchidas.
-
-## Detalhes técnicos
-
-- Sem migrations de schema — apenas DELETEs.
-- Nenhum edge function novo. Reaproveita `crmtg-daily-build`.
-- Cutoff continua em `_shared/crmtg-cutoff.ts` (`2026-07-05`).
-- Pagination via `.range()` em `crmtg_customer_state` e `crmtg_history` para evitar corte em 1000.
+- `SELECT COUNT(*) FROM crmtg_customer_state;` → deve retornar 1.
+- Recarregar Painel Inicial: card "Clientes por funil" mostra Creatina = 1, sem linha "Sem funil atribuído".
