@@ -663,6 +663,7 @@ export const useDashboardData = () => {
       return [o.product_category, ...itemCategories].filter(Boolean);
     }))].sort(),
     customers: [...new Set(orders.map(o => o.customer_name))],
+    statuses: [...new Set(orders.map(o => normalizeStatus(o.status)).filter(Boolean))].sort(),
   }), [orders]);
 
   return {
