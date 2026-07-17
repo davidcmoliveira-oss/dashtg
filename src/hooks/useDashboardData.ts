@@ -447,8 +447,10 @@ export const useDashboardData = () => {
 
   // Calculate KPIs
   const kpis: KPIData = useMemo(() => {
-    const validOrders = filteredOrders.filter(o => normalizeStatus(o.status) === 'faturado');
-    const totalRevenue = validOrders.reduce((sum, o) => sum + o.total_paid, 0);
+    // Considera TODOS os status por padrão (para bater com o total do ERP).
+    // Uso o filtro global de status para segmentar quando necessário.
+    const validOrders = filteredOrders;
+    const totalRevenue = validOrders.reduce((sum, o) => sum + (o.total_paid || 0), 0);
     const totalOrders = validOrders.length;
     const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
     const uniqueCustomers = new Set(validOrders.map(o => o.customer_id)).size;
