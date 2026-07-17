@@ -96,6 +96,7 @@ export const useDashboardData = () => {
       salesChannel: [],
       paymentMethod: [],
       productCategory: [],
+      status: [],
       timeRange: { start: 0, end: 24 },
       customerId: null,
       period: 'last30',
