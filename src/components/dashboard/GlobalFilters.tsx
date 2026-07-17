@@ -215,6 +215,31 @@ export const GlobalFilters = ({
             </Select>
           </div>
 
+          {/* Status */}
+          <div className="space-y-2">
+            <Label className="text-sm text-muted-foreground">Status do Pedido</Label>
+            <Select
+              value={filters.status[0] || "all"}
+              onValueChange={(v) => onFiltersChange({
+                ...filters,
+                status: v === "all" ? [] : [v]
+              })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {filterOptions.statuses.map(s => (
+                  <SelectItem key={s} value={s}>
+                    {statusLabel(s)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+
           {/* Customer Search */}
           <div className="space-y-2">
             <Label className="text-sm text-muted-foreground">Cliente</Label>
