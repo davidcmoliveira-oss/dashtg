@@ -234,7 +234,20 @@ async function doSync(db: ReturnType<typeof getSupabaseAdmin>, tinyApiToken: str
         if (data.length < PAGE) break;
         pageIdx++;
       }
-      const { data: existingDet } = await db.from('tiny_order_details_cache').select('tiny_order_id');
+      const existingDet: { tiny_order_id: number }[] = [];
+      let detPage = 0;
+      while (true) {
+        const { data, error } = await db
+          .from('tiny_order_details_cache')
+          .select('tiny_order_id')
+          .order('tiny_order_id', { ascending: false })
+          .range(detPage * PAGE, detPage * PAGE + PAGE - 1);
+        if (error) throw new Error(error.message);
+        if (!data || data.length === 0) break;
+        existingDet.push(...(data as any));
+        if (data.length < PAGE) break;
+        detPage++;
+      }
       const haveSet = new Set((existingDet || []).map((r: any) => r.tiny_order_id));
       const idsToFetch = allCachedIds.filter(id => !haveSet.has(id)).slice(0, limit);
       console.log(`Backfill: ${allCachedIds.length} orders, ${haveSet.size} have details, fetching ${idsToFetch.length}`);
