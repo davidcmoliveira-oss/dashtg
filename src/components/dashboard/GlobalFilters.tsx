@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { DashboardFilters } from "@/types/dashboard";
+import { DashboardFilters, statusLabel } from "@/types/dashboard";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ interface GlobalFiltersProps {
     paymentMethods: string[];
     categories: string[];
     customers: string[];
+    statuses: string[];
   };
 }
 
@@ -46,6 +47,7 @@ export const GlobalFilters = ({
     filters.salesChannel.length > 0,
     filters.paymentMethod.length > 0,
     filters.productCategory.length > 0,
+    filters.status.length > 0,
     filters.customerId !== null,
   ].filter(Boolean).length;
 
@@ -55,6 +57,7 @@ export const GlobalFilters = ({
       salesChannel: [],
       paymentMethod: [],
       productCategory: [],
+      status: [],
       customerId: null,
     });
   };
