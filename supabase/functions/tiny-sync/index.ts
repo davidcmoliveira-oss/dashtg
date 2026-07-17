@@ -271,7 +271,12 @@ async function doSync(db: ReturnType<typeof getSupabaseAdmin>, tinyApiToken: str
     let dataFinal: string;
     const today = new Date();
 
-    if (mode === 'full') {
+    if (body.dataInicial && body.dataFinal) {
+      // Custom range (DD/MM/YYYY)
+      dataInicial = body.dataInicial;
+      dataFinal = body.dataFinal;
+      console.log(`Custom sync: ${dataInicial} to ${dataFinal}`);
+    } else if (mode === 'full') {
       // From January 1st of current year
       dataInicial = `01/01/${today.getFullYear()}`;
       dataFinal = formatDate(today);
