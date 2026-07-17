@@ -471,7 +471,7 @@ export const useDashboardData = () => {
   const customers: CustomerData[] = useMemo(() => {
     // Para "cliente ativo" usar a ÚLTIMA compra real do cliente (dataset completo, sem filtro de data)
     const lastOrderDateByCustomer = new Map<string, string>();
-    orders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(o => {
+    orders.filter(o => normalizeStatus(o.status) !== 'cancelled').forEach(o => {
       const cur = lastOrderDateByCustomer.get(o.customer_id);
       if (!cur || parseBrazilianDate(o.order_date) > parseBrazilianDate(cur)) {
         lastOrderDateByCustomer.set(o.customer_id, o.order_date);
