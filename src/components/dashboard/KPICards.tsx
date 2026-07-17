@@ -85,8 +85,8 @@ const KPICard = ({ title, value, change, icon: Icon, sparkline, isLoading, delay
 };
 
 const TOOLTIPS: Record<string, string> = {
-  "Receita Total": "Soma do valor total pago (total_paid) de todos os pedidos faturados no período selecionado.",
-  "Nº de Pedidos": "Quantidade total de pedidos faturados/confirmados no período. Pedidos cancelados ou pendentes não são contabilizados.",
+  "Receita Total": "Soma do valor total pago (total_paid) de todos os pedidos no período selecionado, considerando todos os status. Use o filtro global de Status para segmentar (ex: apenas Faturado).",
+  "Nº de Pedidos": "Quantidade total de pedidos no período, considerando todos os status. Para ver apenas um status específico (ex: Faturado, Aprovado, Cancelado), use o filtro global de Status.",
   "Ticket Médio": "Receita total dividida pelo número de pedidos no período. Indica o valor médio gasto por pedido.",
   "Clientes Únicos": "Quantidade de clientes distintos que realizaram pelo menos um pedido no período selecionado.",
 };
