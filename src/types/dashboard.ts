@@ -88,6 +88,7 @@ export interface DashboardFilters {
   salesChannel: string[];
   paymentMethod: string[];
   productCategory: string[];
+  status: string[];
   timeRange: { start: number; end: number };
   customerId: string | null;
   period: 'today' | 'mtd' | 'last30' | 'custom';
