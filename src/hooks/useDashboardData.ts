@@ -484,7 +484,7 @@ export const useDashboardData = () => {
       paymentMethods: Map<string, number>;
     }>();
 
-    filteredOrders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(order => {
+    filteredOrders.forEach(order => {
       const existing = customerMap.get(order.customer_id);
       if (existing) {
         existing.orders.push(order);
