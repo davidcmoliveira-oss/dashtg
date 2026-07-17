@@ -96,6 +96,7 @@ export const useDashboardData = () => {
       salesChannel: [],
       paymentMethod: [],
       productCategory: [],
+      status: [],
       timeRange: { start: 0, end: 24 },
       customerId: null,
       period: 'last30',
@@ -431,6 +432,10 @@ export const useDashboardData = () => {
       }
       if (filters.customerId && order.customer_id !== filters.customerId) return false;
 
+      if (filters.status && filters.status.length > 0) {
+        if (!filters.status.includes(normalizeStatus(order.status))) return false;
+      }
+
       if (order.order_time && filters.timeRange) {
         const [h] = order.order_time.split(':').map(Number);
         if (h < filters.timeRange.start || h >= filters.timeRange.end) return false;
@@ -442,8 +447,10 @@ export const useDashboardData = () => {
 
   // Calculate KPIs
   const kpis: KPIData = useMemo(() => {
-    const validOrders = filteredOrders.filter(o => normalizeStatus(o.status) === 'faturado');
-    const totalRevenue = validOrders.reduce((sum, o) => sum + o.total_paid, 0);
+    // Considera TODOS os status por padrão (para bater com o total do ERP).
+    // Uso o filtro global de status para segmentar quando necessário.
+    const validOrders = filteredOrders;
+    const totalRevenue = validOrders.reduce((sum, o) => sum + (o.total_paid || 0), 0);
     const totalOrders = validOrders.length;
     const avgTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
     const uniqueCustomers = new Set(validOrders.map(o => o.customer_id)).size;
@@ -464,7 +471,7 @@ export const useDashboardData = () => {
   const customers: CustomerData[] = useMemo(() => {
     // Para "cliente ativo" usar a ÚLTIMA compra real do cliente (dataset completo, sem filtro de data)
     const lastOrderDateByCustomer = new Map<string, string>();
-    orders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(o => {
+    orders.filter(o => normalizeStatus(o.status) !== 'cancelled').forEach(o => {
       const cur = lastOrderDateByCustomer.get(o.customer_id);
       if (!cur || parseBrazilianDate(o.order_date) > parseBrazilianDate(cur)) {
         lastOrderDateByCustomer.set(o.customer_id, o.order_date);
@@ -477,7 +484,7 @@ export const useDashboardData = () => {
       paymentMethods: Map<string, number>;
     }>();
 
-    filteredOrders.filter(o => normalizeStatus(o.status) === 'faturado').forEach(order => {
+    filteredOrders.forEach(order => {
       const existing = customerMap.get(order.customer_id);
       if (existing) {
         existing.orders.push(order);
@@ -656,6 +663,7 @@ export const useDashboardData = () => {
       return [o.product_category, ...itemCategories].filter(Boolean);
     }))].sort(),
     customers: [...new Set(orders.map(o => o.customer_name))],
+    statuses: [...new Set(orders.map(o => normalizeStatus(o.status)).filter(Boolean))].sort(),
   }), [orders]);
 
   return {

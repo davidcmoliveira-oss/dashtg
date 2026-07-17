@@ -88,6 +88,7 @@ export interface DashboardFilters {
   salesChannel: string[];
   paymentMethod: string[];
   productCategory: string[];
+  status: string[];
   timeRange: { start: number; end: number };
   customerId: string | null;
   period: 'today' | 'mtd' | 'last30' | 'custom';
@@ -239,19 +240,36 @@ export const resolveProductCategory = (
 };
 
 export const normalizeStatus = (status: string): string => {
-  const lower = status?.toLowerCase() || '';
-  if (['cancelado', 'canceled', 'cancelled'].includes(lower)) {
-    return 'cancelled';
-  }
-  if (['faturado', 'paid', 'confirmed'].includes(lower)) {
-    return 'faturado';
-  }
+  const lower = (status || '').toString().toLowerCase().trim();
+  if (!lower) return 'sem status';
+  if (['cancelado', 'canceled', 'cancelled'].includes(lower)) return 'cancelled';
+  if (['faturado', 'paid', 'confirmed'].includes(lower)) return 'faturado';
   return lower;
 };
 
+// Status legíveis para exibição em filtros/rótulos
+export const statusLabel = (status: string): string => {
+  const s = normalizeStatus(status);
+  const map: Record<string, string> = {
+    'faturado': 'Faturado',
+    'cancelled': 'Cancelado',
+    'aprovado': 'Aprovado',
+    'enviado': 'Enviado',
+    'preparando envio': 'Preparando envio',
+    'em aberto': 'Em aberto',
+    'pronto para envio': 'Pronto para envio',
+    'entregue': 'Entregue',
+    'não entregue': 'Não entregue',
+    'atendido': 'Atendido',
+    'sem status': 'Sem status',
+  };
+  return map[s] || s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+// Considera todos os status como válidos por padrão (para bater com o total do ERP).
+// Cancelados podem ser filtrados via o filtro global de status.
 export const isValidOrder = (order: TinyOrder): boolean => {
-  const status = normalizeStatus(order.status);
-  return status === 'faturado' && order.total_paid > 0;
+  return (order.total_paid || 0) > 0;
 };
 
 export const calculateNetRevenue = (order: TinyOrder): number => {

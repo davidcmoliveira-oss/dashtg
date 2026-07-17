@@ -1,35 +1,31 @@
-## Diagnóstico
+## Objetivo
+Alinhar os totais do dashboard com o ERP Tiny considerando **todos os status** de pedidos por padrão, e adicionar um filtro global de Status para segmentação quando necessário.
 
-Os 16 clientes sem funil no painel são resíduos antigos em `crmtg_customer_state`:
+## Mudanças
 
-- Todos têm `ultimo_pedido_em >= 05/07/2026`, então passaram pelo filtro da limpeza anterior.
-- Nenhum comprou o produto do único funil ativo (Creatina, SKU `0000000010221`).
-- O código atual do `crmtg-daily-build` (linha 135) só cria estado para quem casa com um funil, então esses rows vieram de execuções antigas — provavelmente de funis que foram desativados ou apagados depois.
-- O rebuild manual pós-limpeza retornou `elegiveis:0` e não os removeu.
+### 1. `src/types/dashboard.ts`
+- Ajustar `normalizeStatus` para preservar os status reais da Tiny (faturado, aprovado, enviado, em_aberto, cancelado, etc.) em vez de colapsar tudo em poucos rótulos.
+- Ajustar `isValidOrder` para considerar todos os status **exceto** os explicitamente inválidos (cancelado, em digitação/rascunho) — para bater com o total do ERP.
+- Adicionar `statusFilter: string[]` no tipo `DashboardFilters`.
 
-## Ação
+### 2. `src/hooks/useDashboardData.ts`
+- Aplicar `filters.statusFilter` sobre `filteredOrders` (quando vazio = todos).
+- Popular `filterOptions.statuses` com a lista distinta de status presentes em `allOrders`.
+- Recalcular KPIs (receita, pedidos, ticket médio, clientes únicos) sobre esse conjunto ampliado.
 
-**1. Remover órfãos existentes** (via data change):
+### 3. `src/components/dashboard/GlobalFilters.tsx`
+- Adicionar novo Select "Status do pedido" ao lado dos filtros de Canal/Pagamento/Categoria.
+- Incluir no contador `activeFiltersCount` e no `clearAllFilters`.
+- Aceitar `filterOptions.statuses: string[]`.
 
-```sql
-DELETE FROM crmtg_customer_state WHERE funnel_atual_id IS NULL;
-```
+### 4. `src/pages/Index.tsx`
+- Inicializar `statusFilter: []` no estado dos filtros.
+- Passar `filterOptions.statuses` para o `GlobalFilters`.
 
-Resultado esperado: painel passa a mostrar apenas 1 cliente (david oliveira no funil Creatina) — refletindo a regra "só entra quem casa com gatilho ativo a partir de 05/07/2026".
+### 5. Componentes que usam status para rótulos (Sales/Orders/Analytics)
+- Atualizar mapeamentos de badges de status para lidar com o conjunto ampliado (fallback genérico para status desconhecidos), sem alterar lógica de negócio.
 
-**2. Prevenção automática** em `supabase/functions/crmtg-daily-build/index.ts`, ao final do run:
-
-```ts
-await supa.from("crmtg_customer_state")
-  .delete()
-  .or("funnel_atual_id.is.null,funnel_atual_id.not.in.(SELECT id FROM crmtg_funnels WHERE ativo)");
-```
-
-(implementado como duas chamadas separadas usando `in()` com IDs de funis ativos carregados no início do run, para respeitar PostgREST.)
-
-Assim, sempre que um funil for desativado/apagado, seus clientes saem do painel automaticamente na próxima execução diária.
-
-## Validação
-
-- `SELECT COUNT(*) FROM crmtg_customer_state;` → deve retornar 1.
-- Recarregar Painel Inicial: card "Clientes por funil" mostra Creatina = 1, sem linha "Sem funil atribuído".
+## Detalhes técnicos
+- Cancelados continuam excluídos das somas de receita por padrão (padrão ERP), mas ficam disponíveis via filtro para auditoria.
+- Nenhuma migração de banco necessária — mudança 100% frontend/presentação.
+- Após aplicar, o total de julho/2026 deve bater com os ~1948 pedidos e R$ 47.182,69 exibidos pelo Tiny.
