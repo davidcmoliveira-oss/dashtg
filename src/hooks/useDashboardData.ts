@@ -432,6 +432,10 @@ export const useDashboardData = () => {
       }
       if (filters.customerId && order.customer_id !== filters.customerId) return false;
 
+      if (filters.status && filters.status.length > 0) {
+        if (!filters.status.includes(normalizeStatus(order.status))) return false;
+      }
+
       if (order.order_time && filters.timeRange) {
         const [h] = order.order_time.split(':').map(Number);
         if (h < filters.timeRange.start || h >= filters.timeRange.end) return false;
